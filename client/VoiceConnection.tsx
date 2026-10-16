@@ -1,0 +1,10 @@
+import { HeadphoneOff, Headphones, Mic, MicOff, MonitorUp, Music2, Square, Wifi, X } from 'lucide-react';
+import type { Channel } from '../shared/types';
+import type { useMedia } from './media';
+
+export default function VoiceConnection({ media, channel, serverName, onOpen, onSounds }: { media: ReturnType<typeof useMedia>; channel?: Channel; serverName?: string; onOpen: () => void; onSounds: () => void }) {
+  if (!media.voiceChannelId && media.connectionStatus !== 'reconnecting' && media.connectionStatus !== 'connecting') return null;
+  return <section className="voice-connected" aria-label="Persistent voice connection"><div><Wifi size={17} /><button className="connected-room" onClick={onOpen}><strong>{media.connectionStatus === 'reconnecting' ? 'Reconnecting voice…' : media.connectionStatus === 'connecting' ? 'Joining voice…' : 'Voice connected'}</strong><small>{channel?.name || 'Voice room'}{serverName && ` · ${serverName}`}</small></button><button className="icon-button danger-text" title="Disconnect voice" aria-label="Disconnect voice" onClick={media.leave}><X size={17} /></button></div>
+    <div className="persistent-voice-controls"><button aria-label={media.muted ? 'Unmute microphone' : 'Mute microphone'} title="Microphone" className={media.muted ? 'danger-text' : ''} onClick={media.toggleMute}>{media.muted ? <MicOff size={16} /> : <Mic size={16} />}</button><button aria-label={media.deafened ? 'Undeafen audio' : 'Deafen audio'} title="Toggle deafen" className={media.deafened ? 'danger-text' : ''} onClick={media.toggleDeafen}>{media.deafened ? <HeadphoneOff size={16} /> : <Headphones size={16} />}</button><button aria-label={media.sharing ? 'Stop sharing' : 'Share screen'} title={media.sharing ? 'Stop sharing' : 'Share screen'} className={media.sharing ? 'stop-sharing-button' : ''} onClick={() => media.sharing ? media.stopShare() : void media.startShare()}>{media.sharing ? <><Square size={13} />Stop sharing</> : <MonitorUp size={16} />}</button><button aria-label="Soundboard" title="Soundboard" onClick={onSounds}><Music2 size={16} /></button></div>
+  </section>;
+}

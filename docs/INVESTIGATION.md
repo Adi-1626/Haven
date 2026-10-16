@@ -1,0 +1,48 @@
+# Local Discord investigation
+
+Investigation date: 2026-10-15. This is a bounded static investigation of shipped installation files, used to inform an independent implementation. No Discord code or assets were incorporated into the application. No private account data, credentials, message history, or application-profile files were read. Discord was not launched, modified, or given debugging flags by this investigation.
+
+## Target and method
+
+The selected installation is `C:\Users\adity\AppData\Local\Discord\app-1.0.9261`. Its shipped `resources/build_info.json` identifies version `1.0.9261`, stable, `stable-win-x64`. Installation inventory and explicit file hashes are direct filesystem observations, separately identified below from REA observations.
+
+REA analyzed packaged JavaScript as inert text. It did not execute its bootstrap, load a native addon, contact Discord services, or observe an active stream. Source selections intentionally exclude bundled dependencies and native implementations. Page exhaustion means the selected view was exhausted, not that Discord's behavior was fully recovered.
+
+## Evidence index
+
+| Label | Artifact / exact selection | Identity and coverage |
+| --- | --- | --- |
+| D1 | `resources/app.asar`; initial coordinator investigation | SHA-256 `535bcb3de917fa65289519e399ea82ab93d9e4df35f7b437ae8433e5ca9d39ca`; REA parent `ev_401f8de953a5f4436deb9717ff61c73cadc1da7d4bee647d98a68fca0de67ca0`. Initial summary reported 5 relevant files, 975 recovered modules, 2 parsed JS files, and partial semantic coverage. This agent did not independently inspect that retained parent: retained references were scoped to the coordinator's REA session. |
+| D2 | `modules/discord_voice-2/discord_voice`, selecting only `package.json` and `index.js` | REA parent `ev_716a104d47b024153a2bda30edeba37feec65c789ee7afe78108bfc7d9591350`; directory digest `c23628975926bdc86a842c2cc4e870912717331a60b55a2864daca24e34efa8b`. One parsed JS file, 22,472 selected text bytes, 478 inventoried files unselected. Application and semantic coverage partial. |
+| D3 | D2's selected `index.js` identity | REA item view `ev_3f01ee9b892615f200808ea3f9aafc81c428ab21cae8c7c0b726092c6b02dd82`; selected asset node `jag_node_9cd21db51f76f18afe7df1264079cc161ccb41e96e11c4a9323aad8d6245542e`. Source SHA-256 `1c12139ccbf818a992fb813b4954a68b1d64b4e96b0f6a97e12862ca5eef764a`, 22,447 bytes, parse complete. Targeted direct read of the same shipped wrapper corroborated feature-boundary names. |
+| D4 | `modules/discord_media-1/discord_media`, selecting only `package.json` and `index.js` | REA parent `ev_bfd0fb53029a32a684f53f2c5f86d9fa1844852bb87eaf8bc3c396021d748f44`; directory digest `ada0ea60a4a5650657444767cb70a0819e41412d68f190616e3a4e6bc064e3b7`. One parsed JS file, 1,712 selected text bytes, 2 files unselected; one statically resolved native-addon request. Application coverage partial, semantic coverage unknown. Targeted direct read corroborated wrapper purpose. |
+| D5 | `modules/discord_desktop_core-1/discord_desktop_core/core.asar`; first manifest only, then manifest plus `mainScreenPreload.js` | SHA-256 `396088f647b3084fc3b6efedd7c5e50eb4d7b9575b817e9b689ff739a54e0c04`. Inventory parent `ev_f30b60756acf7a6e9e03924766e25204b9e27f521a16103041e44de5acb638f7`; selected-preload parent `ev_8031bcdadcf4d304d5b409325a4722b7185bb1573a6169ce72a87a2e3370d134`. Three relevant files; `bundle.js` intentionally unselected. Preload parsing completed, but semantic graph partial/truncated at 9,000 per-file / 10,000 total node ceilings. |
+| F1 | Read-only installation inventory | Installed module directories include desktop core, voice, media, Krisp, notifications, overlay, RPC, and utilities. Names establish package presence, not active execution or internal implementation. |
+| F2 | Read-only native-file hashes | `discord_voice.node`: `d85ef7059a7dd28732f23d157a8fdf965f8c6e394decd2a5293fbe62e3d4a0bc`; `gpu_encoder_helper.exe`: `1d2a5f65941f79f9558627bf77671fb177ef48eaa2051b2bed20c08b8150b7fb`; `discord_media.node`: `35ac78123ec084851b7f672495a7083902fce7c7a6229eecefd934e50acff2c5`. None was loaded or disassembled. |
+| D6 | `Discord.exe`, read-only packaged fuse inspection | REA `ev_86d8c5b535e5cee136b8728cdd4ba7b70841766667af8b5b9981e0742e1d30e1`; executable SHA-256 `08f12bded9410c45363aae2311dba9cff61b655aab7afcbe4ca58774bc9be5c1`, 220,542,392 bytes. One version-1 fuse sentinel. `EnableNodeCliInspectArguments` and `RunAsNode` disabled; `EnableNodeOptionsEnvironmentVariable` enabled. No debugger was attached. These packaged states do not establish whether application code enables a different debugging route. |
+
+## Findings and independent design consequences
+
+| Question | Observation | Interpretation and consequence |
+| --- | --- | --- |
+| Desktop architecture | D1/D5 show ASAR packaging and a distinct core preload. D5 reports one static contextBridge API and three dynamic IPC operations. | This supports an Electron-style packaged boundary, but does not establish all BrowserWindow preferences, channel pairings, or runtime enforcement. Our desktop bridge should expose a small explicit allowlist, validate requests, and keep Node access out of the renderer. |
+| Voice and screen capture boundary | The selected D2/D3 wrapper requests `discord_voice.node`; wrapper methods include desktop-source selection and lifecycle callbacks, self mute/deafen, PTT, per-user volume/mute, stats and video encoder/decoder fallback callbacks. | These are native-facing API candidates, not recovered native algorithms or verified runtime calls. Implement independent media session lifecycle, participant controls, capture end cleanup, and visible connection/stream statistics. |
+| Hardware media | F1/F2 show `gpu_encoder_helper.exe`, `audio_effects_helper.exe`, the voice native module and segmentation resources. D2's wrapper contains encoder/decoder fallback callback names. | Dedicated native components are present. Their presence does not prove which encoder is selected, whether acceleration runs on this hardware, or achievable resolution/FPS. Use Chromium/WebRTC's supported media pipeline and report observed output and performance; do not promise a particular hardware codec. |
+| Meaning of the media package | D4's selected wrapper requests its native module and exposes GPU, memory, and system analytics calls. | The package name alone does not establish capture or transport implementation. Measure resource usage separately from capture quality and network throughput. |
+| Capture quality / native 60 FPS | No controlled live stream was acquired. The selected wrappers do not establish Discord's actual output dimensions, bitrate adaptation, encode rate, source scaling policy, or end-to-end latency. | Treat native-resolution / 15, 30, 60 FPS as independent product requirements. Derive allowed resolution choices from the selected capture track; never offer a larger output than the captured source. Report configured limits separately from measured encoded/received dimensions and FPS. |
+| Scale and transport | Static native-facing connection and stats APIs are visible, but backend topology and operating limits were not measured. | The independent application's bounded WebRTC mesh is an engineering choice. It is not evidence that Discord uses this topology, nor a claim of Discord-scale capacity. An SFU and managed TURN deployment are separate scaling work. |
+
+## Public API grounding
+
+These primary references guide the independent implementation; they are not evidence of Discord internals.
+
+- Electron's [desktopCapturer API](https://www.electronjs.org/docs/latest/api/desktop-capturer) provides screen and window source inventory. `thumbnailSize` controls preview images, so preview dimensions must not be treated as source capture dimensions.
+- [MediaStreamTrack.getSettings](https://developer.mozilla.org/en-US/docs/Web/API/MediaStreamTrack/getSettings) returns current track settings. Capture dimensions should be read back after acquisition and constraint changes, with missing values handled explicitly.
+- The [W3C WebRTC statistics specification](https://www.w3.org/TR/webrtc-stats/) defines sender/receiver and media-source statistics. Encode/send/receive rates are different stages; dimensions, frame counters, timestamps, bitrate deltas, RTT, and loss should be read from the relevant reports rather than inferred from requested constraints. Individual stats may be absent.
+- Electron's [security guidance](https://www.electronjs.org/docs/latest/tutorial/security) informs context isolation, sandboxing, controlled navigation, restricted permissions, and sender validation.
+
+## Verification still required
+
+Discord's actual interface interactions, native codec internals, runtime process boundaries, network topology, capture output and performance remain unverified by this static pass. No security or performance conclusion should be drawn from a zero count in the partial graph.
+
+For the independent application, validate two authenticated clients with real capture permission and a moving source. At each of native 60 / 30 / 15 FPS and lower resolutions, retain selected-source dimensions, track settings, sender encoded dimensions/rate, receiver decoded dimensions/rate, latency, voice continuity, loss, bitrate and CPU/GPU utilization. Repeat with window resizing, capture ending, device removal, reconnects, constrained bandwidth and TURN-only connectivity. A requested 60 FPS setting alone is not a passed 60 FPS test. Physical microphone/speaker quality and sustained native 60 FPS require suitable devices, moving content, hardware and network capacity.

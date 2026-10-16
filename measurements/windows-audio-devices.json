@@ -1,0 +1,50 @@
+{
+  "pass": true,
+  "measuredAt": "2026-10-15T15:43:33.438Z",
+  "inputs": [
+    {
+      "name": "Default - Microphone Array (Intel® Smart Sound Technology for Digital Microphones)",
+      "hasId": true
+    },
+    {
+      "name": "Communications - Microphone Array (Intel® Smart Sound Technology for Digital Microphones)",
+      "hasId": true
+    },
+    {
+      "name": "Microphone Array (Intel® Smart Sound Technology for Digital Microphones)",
+      "hasId": true
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Default - Headphones (Realtek(R) Audio)",
+      "hasId": true
+    },
+    {
+      "name": "Communications - Headphones (Realtek(R) Audio)",
+      "hasId": true
+    },
+    {
+      "name": "Speakers (Realtek(R) Audio)",
+      "hasId": true
+    },
+    {
+      "name": "Headphones (Realtek(R) Audio)",
+      "hasId": true
+    }
+  ],
+  "selected": [
+    {
+      "label": "Default - Microphone Array (Intel® Smart Sound Technology for Digital Microphones)",
+      "live": true
+    }
+  ],
+  "outputSelection": "Non-default output selection accepted",
+  "tracksEnded": true,
+  "limitations": [
+    "Real Windows device enumeration and brief default microphone permission/capture only; no recording saved, transmitted or played",
+    "Silent output sink selection accepted by Chromium does not prove physical speaker routing",
+    "No physical plug/unplug, headset switch, acoustic quality or game tested",
+    "Disposable profile retained; real Haven profile and Windows default audio devices not modified"
+  ]
+}

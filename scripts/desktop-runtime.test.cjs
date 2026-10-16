@@ -1,0 +1,92 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { EventEmitter } = require('node:events');
+const { defaults, parseShortcut, validateSettings } = require('../electron/desktop-settings.cjs');
+const { createDesktopRuntime } = require('../electron/desktop-runtime.cjs');
+
+test('keyboard combinations normalize, reject duplicates and Windows-reserved shortcuts', () => {
+  assert.deepEqual(parseShortcut(' shift + ctrl + space '), { accelerator: 'Control+Shift+Space', keyCode: 32, modifiers: 6 });
+  assert.equal(parseShortcut('alt+f8').keyCode, 119);
+  assert.equal(parseShortcut('').accelerator, '');
+  for (const invalid of ['Space', 'Control+Control+M', 'Win+M', 'Alt+F4', 'Control+Alt+Delete', 'Control+Escape', 'Alt+Tab', 'Control+M+N', 'Control+Unknown']) assert.throws(() => parseShortcut(invalid));
+  assert.throws(() => validateSettings(defaults, { muteShortcut: defaults.pttShortcut }), /different/);
+  assert.throws(() => validateSettings(defaults, { closeToTray: 'true' }), /Invalid/);
+  assert.throws(() => validateSettings(defaults, { arbitrary: true }), /Unknown/);
+  assert.throws(() => validateSettings(defaults, { startMinimized: true }), /tray/);
+  assert.throws(() => parseShortcut('Control+K'), /quick switcher/);
+});
+
+test('desktop settings apply, persist, restore and tray actions preserve the window', async () => {
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'haven-runtime-unit-'));
+  const registered = new Map();
+  const login = [];
+  const window = new EventEmitter();
+  const shortcuts = [];
+  let visible = true;
+  let minimized = false;
+  let quit = false;
+  window.webContents = { send: (name, data) => { if (name === 'desktop:shortcut') shortcuts.push(data); }, isDestroyed: () => false };
+  Object.assign(window, { isDestroyed: () => false, isMinimized: () => minimized, isVisible: () => visible, hide: () => { visible = false; window.emit('hide'); }, show: () => { visible = true; window.emit('show'); }, focus: () => {}, restore: () => { minimized = false; window.emit('restore'); } });
+  let tray;
+  class FakeTray extends EventEmitter { constructor() { super(); tray = this; } setToolTip(value) { this.tooltip = value; } setContextMenu(value) { this.menu = value; } destroy() { this.destroyed = true; } }
+  const app = { getPath: () => profile, getAppPath: () => 'C:\\Haven', isPackaged: false, setLoginItemSettings: value => login.push(value), quit: () => { quit = true; } };
+  const options = { app, Tray: FakeTray, Menu: { buildFromTemplate: items => items }, nativeImage: { createFromBitmap: () => ({}) }, globalShortcut: { unregisterAll: () => registered.clear(), register: (key, callback) => { if (key === 'Control+Alt+F24') return false; registered.set(key, callback); return true; }, unregister: key => registered.delete(key) }, getWindow: () => window, getClients: () => [window.webContents], onQuit: () => {} };
+  const runtime = createDesktopRuntime(options);
+  try {
+    runtime.attachWindow(window);
+    await runtime.apply({ closeToTray: true, minimizeToTray: true, startAtLogin: true, gamingMode: true });
+    assert.equal(login.length, process.platform === 'win32' ? 1 : 0);
+    if (login.length) assert.equal(login[0].openAtLogin, true);
+    let prevented = false;
+    window.emit('close', { preventDefault: () => { prevented = true; } });
+    assert.equal(prevented, true);
+    assert.equal(visible, false);
+    assert.equal(runtime.snapshot(window.webContents).runtime.background, true);
+    runtime.setVoiceState({ connected: true, muted: true, deafened: false, sharing: true });
+    assert.match(tray.tooltip, /Muted.*Sharing/);
+    tray.menu.find(item => item.label === 'Unmute microphone').click();
+    tray.menu.find(item => item.label === 'Deafen audio').click();
+    assert.deepEqual(shortcuts.slice(-2), [{ action: 'mute' }, { action: 'deafen' }]);
+    tray.menu.find(item => item.label === 'Open Haven').click();
+    assert.equal(visible, true);
+    assert.equal(runtime.snapshot(window.webContents).runtime.background, false);
+    await assert.rejects(runtime.apply({ pttShortcut: 'Control+Alt+F24' }), /already registered/);
+    assert.equal(runtime.snapshot(window.webContents).settings.pttShortcut, defaults.pttShortcut);
+    assert.equal(registered.has(defaults.muteShortcut), true);
+    const muteCallback = registered.get(defaults.muteShortcut);
+    await runtime.setRecording(true);
+    assert.equal(registered.size, 0);
+    assert.deepEqual(shortcuts.at(-1), { action: 'ptt', pressed: false });
+    const eventCount = shortcuts.length;
+    muteCallback();
+    assert.equal(shortcuts.length, eventCount);
+    await assert.rejects(runtime.apply({ muteShortcut: 'Control+Shift+Q' }), /recording/);
+    window.emit('blur');
+    assert.equal(registered.has(defaults.muteShortcut), true);
+    registered.get(defaults.muteShortcut)();
+    assert.deepEqual(shortcuts.at(-1), { action: 'mute' });
+    await runtime.setRecording(true);
+    await runtime.setRecording(false);
+    assert.equal(registered.has(defaults.deafenShortcut), true);
+    const restored = createDesktopRuntime(options);
+    assert.equal(restored.snapshot(window.webContents).settings.gamingMode, true);
+    restored.beforeQuit();
+    assert.equal(runtime.snapshot({}).runtime.canConfigureDesktop, false);
+    const survivingContents = window.webContents;
+    window.isDestroyed = () => true;
+    Object.defineProperty(window, 'webContents', { get: () => { throw new TypeError('Object has been destroyed'); } });
+    options.getClients = () => [survivingContents];
+    assert.equal(runtime.snapshot(survivingContents).runtime.canConfigureDesktop, false);
+    assert.equal(runtime.snapshot(survivingContents).runtime.globalPttAvailable, false);
+    tray.menu.find(item => item.label === 'Quit Haven (disconnect voice)').click();
+    assert.equal(quit, true);
+  } finally {
+    runtime.beforeQuit();
+    assert.equal(registered.size, 0);
+    const relative = path.relative(os.tmpdir(), profile);
+    if (relative.startsWith('haven-runtime-unit-') && !relative.includes(path.sep)) fs.rmSync(profile, { recursive: true, force: true });
+  }
+});
