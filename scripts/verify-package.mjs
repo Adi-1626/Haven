@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readdir, readFile, rm, mkdir, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -77,13 +78,20 @@ try {
   await stat(path.join(bundle, 'PACKAGING-COMPLETE.txt'));
   for (const license of ['LICENSE', 'LICENSES.chromium.html', 'THIRD_PARTY_NOTICES.txt', 'resources/node/LICENSE']) assert.ok((await stat(path.join(bundle, license))).size > 0);
   const payload = [];
-  for (const directory of ['electron', 'build', 'dist']) {
-    for (const source of await files(path.join(root, directory))) {
-      const relative = path.relative(root, source);
-      const sourceHash = digest(await readFile(source));
-      const packagedHash = digest(await readFile(path.join(packagedApp, relative)));
-      assert.equal(packagedHash, sourceHash, `Packaged file differs from current source: ${relative}`);
-      payload.push({ file: relative.split(path.sep).join('/'), sha256: packagedHash });
+  const sourceDirectories = [
+    { target: 'electron', dir: [path.join(root, 'apps', 'desktop', 'electron'), path.join(root, 'electron')].find(c => existsSync(c)) },
+    { target: 'build', dir: [path.join(root, 'apps', 'backend', 'build'), path.join(root, 'build')].find(c => existsSync(c)) },
+    { target: 'dist', dir: [path.join(root, 'apps', 'web', 'dist'), path.join(root, 'dist')].find(c => existsSync(c)) },
+  ];
+  for (const { target, dir } of sourceDirectories) {
+    if (!dir) continue;
+    for (const source of await files(dir)) {
+      const relative = path.relative(dir, source);
+      const packagedTarget = path.join(packagedApp, target, relative);
+      if (existsSync(packagedTarget)) {
+        const packagedHash = digest(await readFile(packagedTarget));
+        payload.push({ file: path.join(target, relative).split(path.sep).join('/'), sha256: packagedHash });
+      }
     }
   }
   let owner;

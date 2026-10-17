@@ -125,7 +125,7 @@ test('cancelling capture preserves voice, socket reconnect preserves active capt
     const harness = (window as unknown as { mediaHarness: MediaHarness }).mediaHarness;
     return { captures: harness.captures.length, captureLive: harness.captures[0].active, microphones: harness.microphones.length, micLive: harness.microphones[0].active };
   })).toEqual({ captures: 1, captureLive: true, microphones: 1, micLive: true });
-  await page.locator('.voice-connected').getByRole('button', { name: 'Mute microphone', exact: true }).click();
+  await page.locator('.persistent-voice-controls').getByRole('button', { name: 'Mute microphone', exact: true }).click();
   await page.locator('.voice-connected').getByRole('button', { name: 'Deafen audio', exact: true }).click();
   await page.reload();
   await page.getByRole('button', { name: server.name, exact: true }).click();
@@ -138,8 +138,8 @@ test('cancelling capture preserves voice, socket reconnect preserves active capt
 
 test('device labels, switching, unplug fallback and microphone test changes release superseded captures', async ({ page }) => {
   await setup(page, 'devices');
-  await page.getByRole('button', { name: 'User settings', exact: true }).click();
-  await page.getByRole('button', { name: 'voice & audio', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'voice & video', exact: true }).click();
   const input = page.locator('select').filter({ has: page.locator('option', { hasText: 'Hotplug test microphone' }) });
   await expect(input).toHaveCount(1);
   await input.selectOption('test-hotplug');
@@ -168,8 +168,8 @@ test('device labels, switching, unplug fallback and microphone test changes rele
 
 test('browser push-to-talk applies combinations, rejects conflicts and gaming mode persists', async ({ page }) => {
   await setup(page, 'shortcuts');
-  await page.getByRole('button', { name: 'User settings', exact: true }).click();
-  await page.getByRole('button', { name: 'voice & audio', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'voice & video', exact: true }).click();
   await page.getByRole('checkbox', { name: /^Push to talk/ }).check();
   await page.getByRole('button', { name: 'desktop & gaming', exact: true }).click();
   const transmitting = () => page.evaluate(() => (window as unknown as { mediaHarness: MediaHarness }).mediaHarness.microphones.filter(stream => stream.active).some(stream => stream.getAudioTracks().some(track => track.enabled)));

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import type { Bootstrap } from '../shared/types';
+import type { Bootstrap } from '@haven/shared/types';
 
 const password = 'Haven-Communication-2026';
 const suffix = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -205,8 +205,15 @@ test('persistent community voice, microphone test playback, fullscreen streams a
     await expect(guest.locator('.voice-roster')).toContainText(ownerName);
     await expect(page.locator('.voice-roster')).toContainText(guestName);
     await expect.poll(() => receivedAudio(guest), { timeout: 25_000 }).toBeGreaterThan(100);
+    await page.getByRole('button', { name: /^Voice connection:/ }).hover();
+    const diagnostics = page.getByRole('tooltip');
+    await expect(diagnostics).toContainText(guestName);
+    await expect(diagnostics.locator('.connection-overview strong')).toHaveText(/^\d+ ms$/, { timeout: 15_000 });
+    await expect(diagnostics).toContainText('Network ICE RTT');
+    await page.keyboard.press('Escape');
+    await expect(diagnostics).toBeHidden();
     await expect.poll(async () => guest.locator('.voice-roster button.speaking').filter({ hasText: ownerName }).count(), { timeout: 15_000 }).toBeGreaterThan(0);
-    await page.locator('.voice-connected').getByRole('button', { name: 'Mute microphone', exact: true }).click();
+    await page.locator('.persistent-voice-controls').getByRole('button', { name: 'Mute microphone', exact: true }).click();
     await expect.poll(async () => (await bootstrap(guest)).voice.find(peer => peer.user.username === ownerName)?.muted).toBe(true);
     await expect(guest.locator('.voice-room-view .person-tile').filter({ hasText: ownerName }).getByText('Muted', { exact: true })).toBeVisible();
     await page.locator('.voice-connected').getByRole('button', { name: 'Unmute microphone', exact: true }).click();
@@ -220,8 +227,19 @@ test('persistent community voice, microphone test playback, fullscreen streams a
     await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Text navigation keeps voice connected');
     await page.getByRole('textbox', { name: 'Message', exact: true }).press('Enter');
     expect((await bootstrap(guest)).voice).toHaveLength(2);
-    await page.getByRole('button', { name: 'User settings', exact: true }).click();
-    await page.getByRole('button', { name: 'voice & audio', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'voice & video', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Noise suppression mode', exact: true }).selectOption('enhanced');
+    await expect(page.getByRole('status').filter({ hasText: 'Outgoing microphone:' })).toContainText('RNNoise active', { timeout: 15_000 });
+    const suppression = page.getByRole('checkbox', { name: /^Noise suppression/ });
+    await suppression.uncheck();
+    await expect(page.getByRole('status').filter({ hasText: 'Outgoing microphone:' })).toContainText('off');
+    await suppression.check();
+    await expect(page.getByRole('status').filter({ hasText: 'Outgoing microphone:' })).toContainText('RNNoise active', { timeout: 15_000 });
+    await page.getByRole('combobox', { name: 'Input device', exact: true }).selectOption({ index: 1 });
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __microphones: MediaStream[] }).__microphones.filter(stream => stream.getTracks().some(track => track.readyState === 'live')).length)).toBe(1);
+    await page.getByRole('combobox', { name: 'Noise suppression mode', exact: true }).selectOption('standard');
+    await expect(page.getByRole('status').filter({ hasText: 'Outgoing microphone:' })).toContainText('browser suppression active');
     await page.getByRole('slider', { name: 'Input sensitivity', exact: true }).fill('-60');
     await page.getByRole('button', { name: "Let's Check", exact: true }).click();
     await expect(page.getByRole('button', { name: 'Stop Test', exact: true })).toBeVisible();
@@ -235,8 +253,8 @@ test('persistent community voice, microphone test playback, fullscreen streams a
     await expect.poll(() => page.evaluate(() => (window as unknown as { __microphones: MediaStream[] }).__microphones.filter(stream => stream.getTracks().some(track => track.readyState === 'live')).length)).toBe(1);
     const before = await receivedAudio(guest);
     await expect.poll(() => receivedAudio(guest)).toBeGreaterThan(before + 100);
-    await page.getByRole('button', { name: 'User settings', exact: true }).click();
-    await page.getByRole('button', { name: 'voice & audio', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'voice & video', exact: true }).click();
     await page.getByRole('slider', { name: 'Input volume', exact: true }).fill('0');
     await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
     let previousEnergy = await receivedAudioEnergy(guest);
@@ -254,8 +272,8 @@ test('persistent community voice, microphone test playback, fullscreen streams a
     await expect.poll(() => receivedAudioEnergy(guest), { timeout: 10_000 }).toBeGreaterThan(silentEnergy + .0001);
     const soundEnergy = await receivedAudioEnergy(guest) - silentEnergy;
     await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
-    await page.getByRole('button', { name: 'User settings', exact: true }).click();
-    await page.getByRole('button', { name: 'voice & audio', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'voice & video', exact: true }).click();
     await page.getByRole('slider', { name: 'Input volume', exact: true }).fill('1');
     await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
     await page.locator('.voice-connected').getByRole('button', { name: 'Share screen', exact: true }).click();

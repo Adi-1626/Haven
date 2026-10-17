@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
 async function settings(page: Page) {
-  await page.getByRole('button', { name: 'User settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'desktop & gaming', exact: true }).click();
 }
 

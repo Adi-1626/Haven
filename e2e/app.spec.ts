@@ -132,7 +132,7 @@ test('actual WebRTC audio and encoded screen video between independent clients',
   await expect.poll(async () => JSON.parse(await page.locator('.stream-stats pre').textContent() || '{}').outbound?.[0]?.fps || 60, { timeout: 15_000 }).toBeLessThanOrEqual(16);
   console.log('15 fps screen sample:', await page.locator('.stream-stats pre').textContent());
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
-  await page.getByRole('button', { name: 'Mute', exact: true }).click();
+  await page.locator('.user-panel').getByRole('button', { name: 'Mute microphone', exact: true }).click();
   const roster = await (await second.request.get('/api/bootstrap')).json();
   await expect.poll(async () => { const data = await (await second.request.get('/api/bootstrap')).json(); return data.voice.find((peer: any) => peer.user.username === `speaker${suffix}`)?.muted; }).toBe(true);
   await page.getByRole('button', { name: 'Disconnect voice', exact: true }).click();
@@ -144,7 +144,7 @@ test('responsive navigation and settings remain usable', async ({ page }) => {
   await page.setViewportSize({ width: 430, height: 860 });
   await register(page, `mobile${Date.now().toString().slice(-8)}`);
   await page.getByRole('button', { name: 'Toggle navigation' }).click();
-  await page.getByRole('button', { name: 'User settings' }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('DISPLAY NAME').fill('A new name');
   await page.getByRole('button', { name: 'Save profile' }).click();
   await expect(page.getByRole('status')).toHaveText('Settings saved');

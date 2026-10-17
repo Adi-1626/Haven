@@ -1,0 +1,17 @@
+{
+  "name": "@haven/desktop",
+  "version": "0.4.1",
+  "private": true,
+  "description": "Haven Electron desktop client and Windows packaging",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node --test ../../scripts/desktop-*.test.cjs",
+    "package:win": "node ../../scripts/package-windows.mjs"
+  },
+  "devDependencies": {
+    "electron": "^44.7.2",
+    "@playwright/test": "^1.56.0"
+  }
+}

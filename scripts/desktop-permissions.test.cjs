@@ -1,6 +1,9 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { permissionAllowed } = require('../electron/permissions.cjs');
+const fs = require('node:fs');
+const path = require('node:path');
+const electronDir = fs.existsSync(path.resolve(__dirname, '../apps/desktop/electron')) ? path.resolve(__dirname, '../apps/desktop/electron') : path.resolve(__dirname, '../electron');
+const { permissionAllowed } = require(path.join(electronDir, 'permissions.cjs'));
 
 test('device permissions normalize Chromium origin URLs while restricting trusted main-frame capabilities', () => {
   const origin = 'http://127.0.0.1:43127';

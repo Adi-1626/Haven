@@ -22,7 +22,7 @@ test('existing account signs in through the form with a copied username and reta
   expect((await (await page.request.get('/api/auth/me')).json()).user.id).toBe(userId);
   await page.reload();
   await expect(page.locator('.my-profile')).toContainText('Returning member');
-  await page.getByRole('button', { name: 'User settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: false }).click();
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.getByLabel('USERNAME', { exact: true }).fill(username);

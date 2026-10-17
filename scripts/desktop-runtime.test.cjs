@@ -4,8 +4,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
-const { defaults, parseShortcut, validateSettings } = require('../electron/desktop-settings.cjs');
-const { createDesktopRuntime } = require('../electron/desktop-runtime.cjs');
+const electronDir = fs.existsSync(path.resolve(__dirname, '../apps/desktop/electron')) ? path.resolve(__dirname, '../apps/desktop/electron') : path.resolve(__dirname, '../electron');
+const { defaults, parseShortcut, validateSettings } = require(path.join(electronDir, 'desktop-settings.cjs'));
+const { createDesktopRuntime } = require(path.join(electronDir, 'desktop-runtime.cjs'));
 
 test('keyboard combinations normalize, reject duplicates and Windows-reserved shortcuts', () => {
   assert.deepEqual(parseShortcut(' shift + ctrl + space '), { accelerator: 'Control+Shift+Space', keyCode: 32, modifiers: 6 });
@@ -27,16 +28,49 @@ test('desktop settings apply, persist, restore and tray actions preserve the win
   const shortcuts = [];
   let visible = true;
   let minimized = false;
+  let focused = true;
   let quit = false;
-  window.webContents = { send: (name, data) => { if (name === 'desktop:shortcut') shortcuts.push(data); }, isDestroyed: () => false };
-  Object.assign(window, { isDestroyed: () => false, isMinimized: () => minimized, isVisible: () => visible, hide: () => { visible = false; window.emit('hide'); }, show: () => { visible = true; window.emit('show'); }, focus: () => {}, restore: () => { minimized = false; window.emit('restore'); } });
+  const states = [];
+  window.webContents = { send: (name, data) => { if (name === 'desktop:shortcut') shortcuts.push(data); if (name === 'desktop:state') states.push(data); }, isDestroyed: () => false };
+  Object.assign(window, { isDestroyed: () => false, isMinimized: () => minimized, isVisible: () => visible, isFocused: () => focused, hide: () => { visible = false; focused = false; window.emit('hide'); }, show: () => { visible = true; window.emit('show'); }, focus: () => { focused = true; window.emit('focus'); }, restore: () => { minimized = false; window.emit('restore'); } });
   let tray;
-  class FakeTray extends EventEmitter { constructor() { super(); tray = this; } setToolTip(value) { this.tooltip = value; } setContextMenu(value) { this.menu = value; } destroy() { this.destroyed = true; } }
+  class FakeTray extends EventEmitter { constructor() { super(); tray = this; this.updates = 0; } setToolTip(value) { this.tooltip = value; } setContextMenu(value) { this.menu = value; this.updates++; } destroy() { this.destroyed = true; } }
   const app = { getPath: () => profile, getAppPath: () => 'C:\\Haven', isPackaged: false, setLoginItemSettings: value => login.push(value), quit: () => { quit = true; } };
   const options = { app, Tray: FakeTray, Menu: { buildFromTemplate: items => items }, nativeImage: { createFromBitmap: () => ({}) }, globalShortcut: { unregisterAll: () => registered.clear(), register: (key, callback) => { if (key === 'Control+Alt+F24') return false; registered.set(key, callback); return true; }, unregister: key => registered.delete(key) }, getWindow: () => window, getClients: () => [window.webContents], onQuit: () => {} };
   const runtime = createDesktopRuntime(options);
   try {
     runtime.attachWindow(window);
+    const secondary = new EventEmitter();
+    let secondaryFocused = true;
+    secondary.webContents = { send() {}, isDestroyed: () => false };
+    Object.assign(secondary, { isDestroyed: () => false, isVisible: () => true, isMinimized: () => false, isFocused: () => secondaryFocused });
+    runtime.attachWindow(secondary, false);
+    assert.equal(runtime.snapshot(secondary.webContents).runtime.background, false);
+    focused = false; window.emit('blur');
+    assert.equal(runtime.snapshot(window.webContents).runtime.background, true);
+    assert.equal(runtime.snapshot(secondary.webContents).runtime.background, false);
+    secondaryFocused = false; secondary.emit('blur');
+    window.focus();
+    assert.equal(runtime.snapshot(window.webContents).runtime.background, false);
+    assert.equal(runtime.snapshot(secondary.webContents).runtime.background, true);
+    assert.equal(runtime.snapshot(secondary.webContents).runtime.canConfigureDesktop, false);
+    let secondaryClosePrevented = false;
+    secondary.emit('close', { preventDefault() { secondaryClosePrevented = true; } });
+    assert.equal(secondaryClosePrevented, false);
+    const initialStates = states.length;
+    for (let index = 0; index < 50; index++) window.emit('focus');
+    assert.equal(states.length, initialStates, 'unchanged focus events must not cause renderer IPC');
+    focused = false;
+    window.emit('blur');
+    assert.equal(states.at(-1).runtime.background, true, 'visible unfocused windows pause optional visuals');
+    assert.equal(states.length, initialStates + 1);
+    for (let index = 0; index < 50; index++) window.emit('blur');
+    assert.equal(states.length, initialStates + 1);
+    registered.get(defaults.muteShortcut)();
+    registered.get(defaults.deafenShortcut)();
+    assert.deepEqual(shortcuts.slice(-2), [{ action: 'mute' }, { action: 'deafen' }]);
+    window.focus();
+    assert.equal(states.at(-1).runtime.background, false);
     await runtime.apply({ closeToTray: true, minimizeToTray: true, startAtLogin: true, gamingMode: true });
     assert.equal(login.length, process.platform === 'win32' ? 1 : 0);
     if (login.length) assert.equal(login[0].openAtLogin, true);
@@ -47,11 +81,25 @@ test('desktop settings apply, persist, restore and tray actions preserve the win
     assert.equal(runtime.snapshot(window.webContents).runtime.background, true);
     runtime.setVoiceState({ connected: true, muted: true, deafened: false, sharing: true });
     assert.match(tray.tooltip, /Muted.*Sharing/);
+    const trayUpdates = tray.updates;
+    const connectedStates = states.length;
+    for (let index = 0; index < 50; index++) runtime.setVoiceState({ connected: true, muted: true, deafened: false, sharing: true });
+    assert.equal(tray.updates, trayUpdates, 'unchanged voice reports must not rebuild native tray menus');
+    assert.equal(states.length, connectedStates);
     tray.menu.find(item => item.label === 'Unmute microphone').click();
     tray.menu.find(item => item.label === 'Deafen audio').click();
     assert.deepEqual(shortcuts.slice(-2), [{ action: 'mute' }, { action: 'deafen' }]);
     tray.menu.find(item => item.label === 'Open Haven').click();
     assert.equal(visible, true);
+    assert.equal(runtime.snapshot(window.webContents).runtime.background, false);
+    minimized = true;
+    window.emit('minimize');
+    assert.equal(visible, false);
+    assert.equal(runtime.snapshot(window.webContents).runtime.background, true);
+    registered.get(defaults.muteShortcut)();
+    assert.deepEqual(shortcuts.at(-1), { action: 'mute' });
+    runtime.restore();
+    assert.equal(minimized, false);
     assert.equal(runtime.snapshot(window.webContents).runtime.background, false);
     await assert.rejects(runtime.apply({ pttShortcut: 'Control+Alt+F24' }), /already registered/);
     assert.equal(runtime.snapshot(window.webContents).settings.pttShortcut, defaults.pttShortcut);
@@ -64,7 +112,7 @@ test('desktop settings apply, persist, restore and tray actions preserve the win
     muteCallback();
     assert.equal(shortcuts.length, eventCount);
     await assert.rejects(runtime.apply({ muteShortcut: 'Control+Shift+Q' }), /recording/);
-    window.emit('blur');
+    focused = false; window.emit('blur');
     assert.equal(registered.has(defaults.muteShortcut), true);
     registered.get(defaults.muteShortcut)();
     assert.deepEqual(shortcuts.at(-1), { action: 'mute' });
@@ -89,4 +137,9 @@ test('desktop settings apply, persist, restore and tray actions preserve the win
     const relative = path.relative(os.tmpdir(), profile);
     if (relative.startsWith('haven-runtime-unit-') && !relative.includes(path.sep)) fs.rmSync(profile, { recursive: true, force: true });
   }
+});
+
+test('desktop realtime Chromium scheduling stays enabled for background voice and PTT', () => {
+  const main = fs.readFileSync(path.join(electronDir, 'main.cjs'), 'utf8');
+  assert.match(main, /backgroundThrottling:\s*false/);
 });

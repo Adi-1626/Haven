@@ -1,24 +1,39 @@
 {
-  "name": "haven-desktop",
+  "name": "haven-monorepo",
   "version": "0.4.1",
   "private": true,
   "type": "module",
   "description": "An independent community chat and screen sharing application",
-  "main": "electron/main.cjs",
+  "main": "apps/desktop/electron/main.cjs",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
-    "dev": "concurrently -k -n api,ui \"tsx watch server/index.ts\" \"vite --host 127.0.0.1\"",
-    "build": "tsc --noEmit && vite build && tsc -p tsconfig.server.json",
-    "start": "node build/server/index.js",
-    "desktop": "electron .",
-    "postinstall": "node node_modules/electron/install.js",
+    "dev": "concurrently -k -n backend,web \"npm run dev --workspace=@haven/backend\" \"npm run dev --workspace=@haven/web\"",
+    "dev:hosted": "concurrently -k -n backend,web \"npm run dev:hosted --workspace=@haven/backend\" \"npm run dev:hosted --workspace=@haven/web\"",
+    "build": "npm run build --workspace=@haven/shared && npm run build --workspace=@haven/backend && npm run build --workspace=@haven/web",
+    "build:backend": "npm run build --workspace=@haven/shared && npm run build --workspace=@haven/backend",
+    "build:web": "npm run build --workspace=@haven/shared && npm run build --workspace=@haven/web",
+    "build:desktop": "npm run package:win",
+    "package:backend": "npm run package --workspace=@haven/backend",
+    "start": "node apps/backend/build/index.js",
+    "desktop": "electron apps/desktop",
+    "desktop:dev": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:5173 && electron apps/desktop --dev\"",
+    "desktop:hosted": "concurrently -k \"npm run dev:hosted\" \"wait-on http://127.0.0.1:5173 && electron apps/desktop --dev --profile=.hosted-profile\"",
     "package:win": "npm run build && node scripts/package-windows.mjs",
-    "desktop:dev": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
-    "test": "tsx --test server/*.test.ts client/*.test.ts && node --test scripts/desktop-*.test.cjs",
+    "test": "npm run test:backend && npm run test:web && npm run test:desktop",
+    "test:backend": "npm test --workspace=@haven/backend",
+    "test:web": "npm test --workspace=@haven/web",
+    "test:desktop": "node --test scripts/desktop-*.test.cjs",
     "test:e2e": "node scripts/test-e2e.mjs",
     "test:desktop-clients": "node scripts/verify-desktop-clients.mjs",
     "test:desktop-gaming": "node scripts/verify-desktop-gaming.mjs",
     "measure:background": "node scripts/measure-background.mjs",
-    "check": "tsc --noEmit"
+    "check": "npm run check --workspace=@haven/shared && npm run check --workspace=@haven/backend && npm run check --workspace=@haven/web"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",

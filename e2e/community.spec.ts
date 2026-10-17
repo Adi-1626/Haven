@@ -54,7 +54,7 @@ test('profiles update throughout active voice, original pictures open, local aud
     await state.guest.getByRole('button', { name: 'View profile for Profile Owner', exact: true }).click();
     const profile = state.guest.getByRole('dialog', { name: 'Profile', exact: true });
     await expect(profile.locator('.avatar img')).toHaveAttribute('src', 'https://haven-image.test/before.png');
-    await page.getByRole('button', { name: 'User settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByLabel('AVATAR', { exact: false }).fill('https://haven-image.test/original.png');
     await page.getByLabel('ABOUT YOU').fill('Live profile after');
     await page.getByRole('button', { name: 'Save profile', exact: true }).click();

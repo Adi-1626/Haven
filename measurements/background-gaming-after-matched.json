@@ -1,0 +1,3532 @@
+{
+  "label": "gaming-after-matched",
+  "executablePath": "source Electron",
+  "version": "0.4.1",
+  "measuredAt": "2026-10-16T15:18:38.485Z",
+  "profile": "C:\\Users\\adity\\AppData\\Local\\Temp\\haven-measure-SP82RK",
+  "machine": {
+    "cpu": "12th Gen Intel(R) Core(TM) i5-12500H",
+    "logicalCores": 16,
+    "ramGB": 15.710990905761719
+  },
+  "boundaries": [
+    "Disposable profile; synthetic microphones; one Electron sender and real headless Chrome receiver on the same Windows computer",
+    "Short sequential loopback samples, not gaming or internet ping benchmarks",
+    "Electron process tree metrics exclude embedded Node backend, keyboard helper, Chrome, driver and OS memory/CPU",
+    "RTP payload bytes exclude IP/UDP/SRTP/RTCP overhead; sampled loss/jitter and candidate RTT are localhost only",
+    "No game launched, no external probe traffic, no network saturation or GPU stress",
+    "Temporary measurement profile retained to avoid recursive cleanup during user work"
+  ],
+  "phases": [
+    {
+      "name": "idle-visible",
+      "minimized": false,
+      "samples": [
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.01321425926078333,
+              "workingSetKB": 102264,
+              "privateKB": 39540
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.00016974316727170674,
+              "workingSetKB": 144480,
+              "privateKB": 116876
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 51024,
+              "privateKB": 13548
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.00048350248376254637,
+              "workingSetKB": 111648,
+              "privateKB": 56912
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 76860,
+              "privateKB": 10088
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 104440,
+              "privateKB": 47052
+            }
+          ],
+          "media": {
+            "time": 3966.600000000559,
+            "sent": 0,
+            "received": 0,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 0,
+            "packetsLost": 0,
+            "packetsReceived": 0,
+            "jitterMs": [],
+            "roundTripMs": [],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.026048197129713752,
+              "workingSetKB": 102460,
+              "privateKB": 39660
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.017004124977697824,
+              "workingSetKB": 144516,
+              "privateKB": 116936
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.0003186035708266015,
+              "workingSetKB": 51028,
+              "privateKB": 13548
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.009506789800663686,
+              "workingSetKB": 111912,
+              "privateKB": 57252
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 76860,
+              "privateKB": 10088
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0.0009661057223880818,
+              "workingSetKB": 104484,
+              "privateKB": 47084
+            }
+          ],
+          "media": {
+            "time": 5181,
+            "sent": 0,
+            "received": 0,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 0,
+            "packetsLost": 0,
+            "packetsReceived": 0,
+            "jitterMs": [],
+            "roundTripMs": [],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.011841696257201642,
+              "workingSetKB": 102472,
+              "privateKB": 39660
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0,
+              "workingSetKB": 144516,
+              "privateKB": 116936
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 51028,
+              "privateKB": 13548
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.009107662854469005,
+              "workingSetKB": 112220,
+              "privateKB": 57596
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 76860,
+              "privateKB": 10088
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 6396.800000000745,
+            "sent": 0,
+            "received": 0,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 0,
+            "packetsLost": 0,
+            "packetsReceived": 0,
+            "jitterMs": [],
+            "roundTripMs": [],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.40745948113876845,
+              "workingSetKB": 102668,
+              "privateKB": 39672
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.3151272565034786,
+              "workingSetKB": 144864,
+              "privateKB": 116996
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.015859145365315977,
+              "workingSetKB": 51088,
+              "privateKB": 13664
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.3724534525446817,
+              "workingSetKB": 114620,
+              "privateKB": 58796
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 76860,
+              "privateKB": 10088
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 7616.600000000559,
+            "sent": 0,
+            "received": 0,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 0,
+            "packetsLost": 0,
+            "packetsReceived": 0,
+            "jitterMs": [],
+            "roundTripMs": [],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.04000104594174603,
+              "workingSetKB": 103460,
+              "privateKB": 39844
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.03178896485542377,
+              "workingSetKB": 136564,
+              "privateKB": 107168
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 51088,
+              "privateKB": 13664
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.0067398730683181345,
+              "workingSetKB": 114624,
+              "privateKB": 58796
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 76860,
+              "privateKB": 10088
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 8820.600000000559,
+            "sent": 0,
+            "received": 0,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 0,
+            "packetsLost": 0,
+            "packetsReceived": 0,
+            "jitterMs": [],
+            "roundTripMs": [],
+            "encoded": []
+          }
+        }
+      ],
+      "summary": {
+        "electronCpuMetricSumMean": 0.2556179809285022,
+        "electronWorkingSetMBMean": 576.47890625,
+        "audioSentKbps": 0,
+        "audioReceivedKbps": 0,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 0,
+        "videoSentKbps": 0,
+        "concealedSamplesDelta": 0,
+        "jitterMsMean": 0,
+        "candidateRoundTripMsMean": 0
+      }
+    },
+    {
+      "name": "idle-minimized",
+      "minimized": true,
+      "samples": [
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.01300095637314133,
+              "workingSetKB": 103836,
+              "privateKB": 39960
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.00006733758381975241,
+              "workingSetKB": 135868,
+              "privateKB": 106440
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.00022273237720712245,
+              "workingSetKB": 51108,
+              "privateKB": 13664
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.0001502157305084212,
+              "workingSetKB": 114956,
+              "privateKB": 59208
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 76860,
+              "privateKB": 10088
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0.00008805917576611483,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 12043.100000000559,
+            "sent": 0,
+            "received": 0,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 0,
+            "packetsLost": 0,
+            "packetsReceived": 0,
+            "jitterMs": [],
+            "roundTripMs": [],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.009675439613335932,
+              "workingSetKB": 103840,
+              "privateKB": 39960
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0,
+              "workingSetKB": 131084,
+              "privateKB": 101648
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 51108,
+              "privateKB": 13664
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.0016544912552429903,
+              "workingSetKB": 114956,
+              "privateKB": 59208
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 76860,
+              "privateKB": 10088
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 13259.700000000186,
+            "sent": 0,
+            "received": 0,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 0,
+            "packetsLost": 0,
+            "packetsReceived": 0,
+            "jitterMs": [],
+            "roundTripMs": [],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.011839725446088308,
+              "workingSetKB": 103840,
+              "privateKB": 39960
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.001462562921104824,
+              "workingSetKB": 129520,
+              "privateKB": 100084
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 51108,
+              "privateKB": 13664
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.002765482168253377,
+              "workingSetKB": 114960,
+              "privateKB": 59212
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 76860,
+              "privateKB": 10088
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 14473.400000000373,
+            "sent": 0,
+            "received": 0,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 0,
+            "packetsLost": 0,
+            "packetsReceived": 0,
+            "jitterMs": [],
+            "roundTripMs": [],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.010436499105737292,
+              "workingSetKB": 103840,
+              "privateKB": 39960
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0,
+              "workingSetKB": 129520,
+              "privateKB": 100084
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 51108,
+              "privateKB": 13664
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.002209931318013341,
+              "workingSetKB": 114960,
+              "privateKB": 59212
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 76860,
+              "privateKB": 10088
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 15686.800000000745,
+            "sent": 0,
+            "received": 0,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 0,
+            "packetsLost": 0,
+            "packetsReceived": 0,
+            "jitterMs": [],
+            "roundTripMs": [],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.012636044138765021,
+              "workingSetKB": 103936,
+              "privateKB": 39960
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0,
+              "workingSetKB": 124952,
+              "privateKB": 95512
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 51108,
+              "privateKB": 13664
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.0018535054974664993,
+              "workingSetKB": 114960,
+              "privateKB": 59212
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 76860,
+              "privateKB": 10088
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 16904,
+            "sent": 0,
+            "received": 0,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 0,
+            "packetsLost": 0,
+            "packetsReceived": 0,
+            "jitterMs": [],
+            "roundTripMs": [],
+            "encoded": []
+          }
+        }
+      ],
+      "summary": {
+        "electronCpuMetricSumMean": 0.013612596540890065,
+        "electronWorkingSetMBMean": 566.6421875,
+        "audioSentKbps": 0,
+        "audioReceivedKbps": 0,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 0,
+        "videoSentKbps": 0,
+        "concealedSamplesDelta": 0,
+        "jitterMsMean": 0,
+        "candidateRoundTripMsMean": 0
+      }
+    },
+    {
+      "name": "voice-visible",
+      "minimized": false,
+      "samples": [
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.04078682911094018,
+              "workingSetKB": 107252,
+              "privateKB": 40552
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.00009305226311375205,
+              "workingSetKB": 172596,
+              "privateKB": 129476
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.06745461598843966,
+              "workingSetKB": 51880,
+              "privateKB": 13924
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.3234192779395793,
+              "workingSetKB": 142628,
+              "privateKB": 73824
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.17706598000565785,
+              "workingSetKB": 80972,
+              "privateKB": 11896
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 21702.60000000056,
+            "sent": 14268,
+            "received": 10473,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 155040,
+            "packetsLost": 0,
+            "packetsReceived": 153,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.094775221369782,
+              "workingSetKB": 107264,
+              "privateKB": 40552
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.6282234621636695,
+              "workingSetKB": 173852,
+              "privateKB": 131212
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.07304213403775767,
+              "workingSetKB": 51880,
+              "privateKB": 13924
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.7490420590494105,
+              "workingSetKB": 144132,
+              "privateKB": 75528
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.17477118138008246,
+              "workingSetKB": 80980,
+              "privateKB": 11896
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 22921.300000000745,
+            "sent": 17432,
+            "received": 14839,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 213600,
+            "packetsLost": 0,
+            "packetsReceived": 214,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.22767828816334534,
+              "workingSetKB": 107272,
+              "privateKB": 40552
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.2015451174289246,
+              "workingSetKB": 173864,
+              "privateKB": 131092
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.09059001090232163,
+              "workingSetKB": 51880,
+              "privateKB": 13924
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.6435000535636295,
+              "workingSetKB": 145200,
+              "privateKB": 76456
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.18057885767777918,
+              "workingSetKB": 80984,
+              "privateKB": 11900
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 24133.300000000745,
+            "sent": 22362,
+            "received": 18946,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 271680,
+            "packetsLost": 0,
+            "packetsReceived": 278,
+            "jitterMs": [
+              1
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.049712761541324625,
+              "workingSetKB": 107280,
+              "privateKB": 40536
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.010392992307019412,
+              "workingSetKB": 173820,
+              "privateKB": 131028
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.08541069754545334,
+              "workingSetKB": 51880,
+              "privateKB": 13924
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.42594412646227786,
+              "workingSetKB": 145768,
+              "privateKB": 76540
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.17884624906133698,
+              "workingSetKB": 80984,
+              "privateKB": 11900
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 25346.200000000186,
+            "sent": 27605,
+            "received": 23143,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 329760,
+            "packetsLost": 0,
+            "packetsReceived": 338,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.03060562746499378,
+              "workingSetKB": 107280,
+              "privateKB": 40536
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.6177186112379478,
+              "workingSetKB": 173980,
+              "privateKB": 131024
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.12015800614950901,
+              "workingSetKB": 51888,
+              "privateKB": 13924
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 1.0864615379524796,
+              "workingSetKB": 147816,
+              "privateKB": 78528
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.24164617833288385,
+              "workingSetKB": 80984,
+              "privateKB": 11900
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 26555.800000000745,
+            "sent": 32358,
+            "received": 27270,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 387840,
+            "packetsLost": 0,
+            "packetsReceived": 399,
+            "jitterMs": [
+              1
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": []
+          }
+        }
+      ],
+      "summary": {
+        "electronCpuMetricSumMean": 1.303892585819932,
+        "electronWorkingSetMBMean": 646.6125,
+        "audioSentKbps": 29.819500535727858,
+        "audioReceivedKbps": 27.688123300089597,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 246,
+        "videoSentKbps": 0,
+        "concealedSamplesDelta": 0,
+        "jitterMsMean": 0.4,
+        "candidateRoundTripMsMean": 1
+      }
+    },
+    {
+      "name": "voice-minimized",
+      "minimized": true,
+      "samples": [
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.3632055821703812,
+              "workingSetKB": 107920,
+              "privateKB": 41160
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.27760384376937386,
+              "workingSetKB": 174892,
+              "privateKB": 131936
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.08022384975283946,
+              "workingSetKB": 51888,
+              "privateKB": 13924
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.8842351532024676,
+              "workingSetKB": 141760,
+              "privateKB": 70892
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.17650168514108147,
+              "workingSetKB": 81008,
+              "privateKB": 11920
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103268,
+              "privateKB": 45604
+            }
+          ],
+          "media": {
+            "time": 29790.60000000056,
+            "sent": 47743,
+            "received": 39186,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 542880,
+            "packetsLost": 0,
+            "packetsReceived": 562,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.0635057175234367,
+              "workingSetKB": 107136,
+              "privateKB": 39044
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.0014215466922462663,
+              "workingSetKB": 174736,
+              "privateKB": 131768
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.076575136339589,
+              "workingSetKB": 51972,
+              "privateKB": 13936
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.3735113517539949,
+              "workingSetKB": 140572,
+              "privateKB": 69780
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16160250695782136,
+              "workingSetKB": 81016,
+              "privateKB": 11920
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0.0014005890712858644,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 31003.60000000056,
+            "sent": 54126,
+            "received": 45081,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 601440,
+            "packetsLost": 0,
+            "packetsReceived": 623,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.06277959625664278,
+              "workingSetKB": 106424,
+              "privateKB": 38120
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.005161990020015796,
+              "workingSetKB": 174656,
+              "privateKB": 131720
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.07200109684681172,
+              "workingSetKB": 51972,
+              "privateKB": 13936
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.30443689411254726,
+              "workingSetKB": 141148,
+              "privateKB": 70508
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16873779775930325,
+              "workingSetKB": 81020,
+              "privateKB": 11920
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 32221.300000000745,
+            "sent": 59806,
+            "received": 50488,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 660000,
+            "packetsLost": 0,
+            "packetsReceived": 684,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.02159678322138812,
+              "workingSetKB": 106456,
+              "privateKB": 38152
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.2636335238333554,
+              "workingSetKB": 176448,
+              "privateKB": 133424
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.06854603387832678,
+              "workingSetKB": 51972,
+              "privateKB": 13936
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.46065910248928055,
+              "workingSetKB": 142132,
+              "privateKB": 71636
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16371252531239197,
+              "workingSetKB": 81020,
+              "privateKB": 11920
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 33436.90000000037,
+            "sent": 65287,
+            "received": 56319,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 718080,
+            "packetsLost": 0,
+            "packetsReceived": 745,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              0
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.016188101837652763,
+              "workingSetKB": 106456,
+              "privateKB": 38152
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.18906379759741487,
+              "workingSetKB": 180492,
+              "privateKB": 137064
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.07090336134453781,
+              "workingSetKB": 51972,
+              "privateKB": 13936
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.4738427808286871,
+              "workingSetKB": 142816,
+              "privateKB": 72376
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16592756639158185,
+              "workingSetKB": 81020,
+              "privateKB": 11920
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 34652.5,
+            "sent": 70157,
+            "received": 61762,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 776640,
+            "packetsLost": 0,
+            "packetsReceived": 809,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              0
+            ],
+            "encoded": []
+          }
+        }
+      ],
+      "summary": {
+        "electronCpuMetricSumMean": 0.993395582820891,
+        "electronWorkingSetMBMean": 645.57421875,
+        "audioSentKbps": 36.881054731693496,
+        "audioReceivedKbps": 37.14761718670083,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 247,
+        "videoSentKbps": 0,
+        "concealedSamplesDelta": 0,
+        "jitterMsMean": 0,
+        "candidateRoundTripMsMean": 0.8
+      }
+    },
+    {
+      "name": "rnnoise-visible",
+      "minimized": false,
+      "samples": [
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.012323640036791275,
+              "workingSetKB": 107120,
+              "privateKB": 38524
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.09270980552856958,
+              "workingSetKB": 222288,
+              "privateKB": 178380
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.06673381450935402,
+              "workingSetKB": 51980,
+              "privateKB": 13928
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.4780951825661501,
+              "workingSetKB": 159628,
+              "privateKB": 104660
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.1500953416450006,
+              "workingSetKB": 81128,
+              "privateKB": 11980
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 38156.10000000056,
+            "sent": 77163,
+            "received": 77926,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 944640,
+            "packetsLost": 0,
+            "packetsReceived": 984,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              0
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.2052247269787852,
+              "workingSetKB": 107168,
+              "privateKB": 38784
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.30775659838560404,
+              "workingSetKB": 222236,
+              "privateKB": 178368
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.06664314454597495,
+              "workingSetKB": 51980,
+              "privateKB": 13928
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.8000190958230877,
+              "workingSetKB": 160416,
+              "privateKB": 105476
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.15858168173295753,
+              "workingSetKB": 81128,
+              "privateKB": 11980
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 39368.300000000745,
+            "sent": 80424,
+            "received": 83563,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1002720,
+            "packetsLost": 0,
+            "packetsReceived": 1047,
+            "jitterMs": [
+              1
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.0792502883695863,
+              "workingSetKB": 107260,
+              "privateKB": 38788
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.036097991000457616,
+              "workingSetKB": 222240,
+              "privateKB": 178368
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.07605125416020027,
+              "workingSetKB": 51980,
+              "privateKB": 13928
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.619227492458051,
+              "workingSetKB": 160920,
+              "privateKB": 105980
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16578683818769163,
+              "workingSetKB": 81128,
+              "privateKB": 11980
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 40585.700000000186,
+            "sent": 84125,
+            "received": 89476,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1061280,
+            "packetsLost": 0,
+            "packetsReceived": 1108,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.10350599013389711,
+              "workingSetKB": 107260,
+              "privateKB": 38804
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.023968270916923683,
+              "workingSetKB": 222044,
+              "privateKB": 178200
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.06718282846535467,
+              "workingSetKB": 51984,
+              "privateKB": 14008
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.6520255785607275,
+              "workingSetKB": 161160,
+              "privateKB": 106296
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16759808656455544,
+              "workingSetKB": 81128,
+              "privateKB": 11980
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 41802.90000000037,
+            "sent": 87582,
+            "received": 94891,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1119840,
+            "packetsLost": 0,
+            "packetsReceived": 1169,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              0
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.1277530812220874,
+              "workingSetKB": 107324,
+              "privateKB": 38788
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.01090718921011725,
+              "workingSetKB": 221920,
+              "privateKB": 178076
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.08843490241822506,
+              "workingSetKB": 51984,
+              "privateKB": 14008
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.7330581340439725,
+              "workingSetKB": 160640,
+              "privateKB": 105908
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.1813501819538742,
+              "workingSetKB": 81128,
+              "privateKB": 11980
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 43014.10000000056,
+            "sent": 90983,
+            "received": 100645,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1177920,
+            "packetsLost": 0,
+            "packetsReceived": 1230,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              0
+            ],
+            "encoded": []
+          }
+        }
+      ],
+      "summary": {
+        "electronCpuMetricSumMean": 1.0940762278835994,
+        "electronWorkingSetMBMean": 709.303125,
+        "audioSentKbps": 22.758336764100456,
+        "audioReceivedKbps": 37.41292713050638,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 246,
+        "videoSentKbps": 0,
+        "concealedSamplesDelta": 0,
+        "jitterMsMean": 0.2,
+        "candidateRoundTripMsMean": 0.7
+      }
+    },
+    {
+      "name": "rnnoise-minimized",
+      "minimized": true,
+      "samples": [
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.015501429473137044,
+              "workingSetKB": 107392,
+              "privateKB": 38792
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.0011602512165620755,
+              "workingSetKB": 199448,
+              "privateKB": 155452
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.0823818375481317,
+              "workingSetKB": 51984,
+              "privateKB": 14008
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.6536571883521098,
+              "workingSetKB": 161652,
+              "privateKB": 106776
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16289569148089206,
+              "workingSetKB": 81128,
+              "privateKB": 11980
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 46244.40000000037,
+            "sent": 98865,
+            "received": 115268,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1332960,
+            "packetsLost": 0,
+            "packetsReceived": 1394,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.01748359129145049,
+              "workingSetKB": 107392,
+              "privateKB": 38792
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0,
+              "workingSetKB": 199448,
+              "privateKB": 155452
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.08382884487273351,
+              "workingSetKB": 51984,
+              "privateKB": 14008
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.705754368376532,
+              "workingSetKB": 161848,
+              "privateKB": 106976
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16854165326948856,
+              "workingSetKB": 81128,
+              "privateKB": 11980
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 47458.300000000745,
+            "sent": 102423,
+            "received": 121093,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1391040,
+            "packetsLost": 0,
+            "packetsReceived": 1455,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.02058045870741718,
+              "workingSetKB": 107420,
+              "privateKB": 39048
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0,
+              "workingSetKB": 165028,
+              "privateKB": 120976
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.08784934404997652,
+              "workingSetKB": 51984,
+              "privateKB": 14008
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.6560599319139382,
+              "workingSetKB": 162008,
+              "privateKB": 107136
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16651477365878062,
+              "workingSetKB": 81128,
+              "privateKB": 11980
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 48669.200000000186,
+            "sent": 106224,
+            "received": 126326,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1449120,
+            "packetsLost": 0,
+            "packetsReceived": 1515,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              0
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.020556098295374175,
+              "workingSetKB": 107448,
+              "privateKB": 39048
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0,
+              "workingSetKB": 165028,
+              "privateKB": 120976
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.07832818797276102,
+              "workingSetKB": 51984,
+              "privateKB": 14008
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.635113884343736,
+              "workingSetKB": 162172,
+              "privateKB": 107300
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16332972388999278,
+              "workingSetKB": 81128,
+              "privateKB": 11980
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 49877.5,
+            "sent": 109424,
+            "received": 132187,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1507200,
+            "packetsLost": 0,
+            "packetsReceived": 1579,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              0
+            ],
+            "encoded": []
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.01632692919407393,
+              "workingSetKB": 107524,
+              "privateKB": 39052
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0,
+              "workingSetKB": 165028,
+              "privateKB": 120976
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.07711954358498076,
+              "workingSetKB": 51984,
+              "privateKB": 14008
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 0.6801737209915611,
+              "workingSetKB": 162488,
+              "privateKB": 107484
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.1629483913662282,
+              "workingSetKB": 81128,
+              "privateKB": 11980
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 51090.800000000745,
+            "sent": 112173,
+            "received": 137853,
+            "videoSent": 0,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1565280,
+            "packetsLost": 0,
+            "packetsReceived": 1639,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              0
+            ],
+            "encoded": []
+          }
+        }
+      ],
+      "summary": {
+        "electronCpuMetricSumMean": 0.9312211687699715,
+        "electronWorkingSetMBMean": 668.621875,
+        "audioSentKbps": 21.967646087816075,
+        "audioReceivedKbps": 37.281280950805986,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 245,
+        "videoSentKbps": 0,
+        "concealedSamplesDelta": 0,
+        "jitterMsMean": 0,
+        "candidateRoundTripMsMean": 0.7
+      }
+    },
+    {
+      "name": "sharing-visible",
+      "minimized": false,
+      "samples": [
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.018670815324237967,
+              "workingSetKB": 108028,
+              "privateKB": 39116
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.9548889688211811,
+              "workingSetKB": 251428,
+              "privateKB": 206156
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.08289772966337242,
+              "workingSetKB": 52016,
+              "privateKB": 14040
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 3.140641512920761,
+              "workingSetKB": 245184,
+              "privateKB": 199436
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.1603486936980045,
+              "workingSetKB": 81128,
+              "privateKB": 11980
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 54393.700000000186,
+            "sent": 112621,
+            "received": 153022,
+            "videoSent": 34650,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1724160,
+            "packetsLost": 0,
+            "packetsReceived": 1808,
+            "jitterMs": [
+              1
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 31,
+                "framesEncoded": 94,
+                "totalEncodeTime": 0.35,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.024617271105826396,
+              "workingSetKB": 108028,
+              "privateKB": 39116
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.7972424040499623,
+              "workingSetKB": 251440,
+              "privateKB": 206156
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.07486062073316137,
+              "workingSetKB": 52016,
+              "privateKB": 14040
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 2.8486678215406007,
+              "workingSetKB": 248756,
+              "privateKB": 199616
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.15908998957152423,
+              "workingSetKB": 81132,
+              "privateKB": 11984
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 55604.40000000037,
+            "sent": 112789,
+            "received": 158593,
+            "videoSent": 43269,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1782240,
+            "packetsLost": 0,
+            "packetsReceived": 1868,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 29,
+                "framesEncoded": 130,
+                "totalEncodeTime": 0.474,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.01898468833513009,
+              "workingSetKB": 108092,
+              "privateKB": 39372
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 1.278898080979065,
+              "workingSetKB": 251512,
+              "privateKB": 206080
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.09868084079876543,
+              "workingSetKB": 52020,
+              "privateKB": 14040
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 3.4068115163782067,
+              "workingSetKB": 249096,
+              "privateKB": 199828
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.166287260118816,
+              "workingSetKB": 81132,
+              "privateKB": 11984
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 56815.40000000037,
+            "sent": 115235,
+            "received": 163987,
+            "videoSent": 52505,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1840320,
+            "packetsLost": 0,
+            "packetsReceived": 1929,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 29,
+                "framesEncoded": 166,
+                "totalEncodeTime": 0.6,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.5173812425879563,
+              "workingSetKB": 108360,
+              "privateKB": 39640
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.8904614723235198,
+              "workingSetKB": 251488,
+              "privateKB": 206064
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.07865516701805245,
+              "workingSetKB": 52020,
+              "privateKB": 14040
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 3.4410395169970935,
+              "workingSetKB": 249360,
+              "privateKB": 200096
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16386833871805917,
+              "workingSetKB": 81132,
+              "privateKB": 11984
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 58028.60000000056,
+            "sent": 115403,
+            "received": 169732,
+            "videoSent": 57332,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1898400,
+            "packetsLost": 0,
+            "packetsReceived": 1989,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 31,
+                "framesEncoded": 203,
+                "totalEncodeTime": 0.732,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.34731134827927446,
+              "workingSetKB": 108380,
+              "privateKB": 39540
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 1.2401607541090225,
+              "workingSetKB": 248524,
+              "privateKB": 203036
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.08484286608043394,
+              "workingSetKB": 52020,
+              "privateKB": 14040
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 3.8540977132075347,
+              "workingSetKB": 249860,
+              "privateKB": 200332
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16916820807674118,
+              "workingSetKB": 81132,
+              "privateKB": 11984
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103292,
+              "privateKB": 45636
+            }
+          ],
+          "media": {
+            "time": 59242.10000000056,
+            "sent": 115571,
+            "received": 175017,
+            "videoSent": 68992,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 1956960,
+            "packetsLost": 0,
+            "packetsReceived": 2053,
+            "jitterMs": [
+              1
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 29,
+                "framesEncoded": 239,
+                "totalEncodeTime": 0.869,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        }
+      ],
+      "summary": {
+        "electronCpuMetricSumMean": 4.80371496828726,
+        "electronWorkingSetMBMean": 824.16875,
+        "audioSentKbps": 4.867585182740324,
+        "audioReceivedKbps": 36.29238511673675,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 245,
+        "videoSentKbps": 56.66529164259939,
+        "concealedSamplesDelta": 0,
+        "jitterMsMean": 0.4,
+        "candidateRoundTripMsMean": 1
+      }
+    },
+    {
+      "name": "sharing-minimized",
+      "minimized": true,
+      "samples": [
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.017245840775750212,
+              "workingSetKB": 107032,
+              "privateKB": 38112
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.34639452957985495,
+              "workingSetKB": 241188,
+              "privateKB": 195716
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.10779864599618,
+              "workingSetKB": 51876,
+              "privateKB": 13740
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 3.735407745337247,
+              "workingSetKB": 239432,
+              "privateKB": 189344
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16961941363550445,
+              "workingSetKB": 81100,
+              "privateKB": 11952
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 62473.10000000056,
+            "sent": 115963,
+            "received": 190233,
+            "videoSent": 91398,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 2112000,
+            "packetsLost": 0,
+            "packetsReceived": 2215,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 30,
+                "framesEncoded": 336,
+                "totalEncodeTime": 1.354,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.024552157133805656,
+              "workingSetKB": 106988,
+              "privateKB": 38072
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.3624740998089269,
+              "workingSetKB": 241148,
+              "privateKB": 195612
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.10968945269750993,
+              "workingSetKB": 51864,
+              "privateKB": 13652
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 4.119204110112034,
+              "workingSetKB": 239916,
+              "privateKB": 189884
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.17420936225673633,
+              "workingSetKB": 81100,
+              "privateKB": 11952
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0.00019027565903260153,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 63687.700000000186,
+            "sent": 116131,
+            "received": 195391,
+            "videoSent": 97596,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 2170080,
+            "packetsLost": 0,
+            "packetsReceived": 2275,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 30,
+                "framesEncoded": 372,
+                "totalEncodeTime": 1.549,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.01872958598754987,
+              "workingSetKB": 107016,
+              "privateKB": 38100
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.3559953136306917,
+              "workingSetKB": 241132,
+              "privateKB": 195588
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.1105201773762817,
+              "workingSetKB": 51868,
+              "privateKB": 13732
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 4.1216134903181345,
+              "workingSetKB": 239960,
+              "privateKB": 189920
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.17537885500682082,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0.0004791107704101188,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 64900.700000000186,
+            "sent": 116299,
+            "received": 201211,
+            "videoSent": 109361,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 2228160,
+            "packetsLost": 0,
+            "packetsReceived": 2339,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 31,
+                "framesEncoded": 409,
+                "totalEncodeTime": 1.738,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.026480751981018597,
+              "workingSetKB": 106700,
+              "privateKB": 37592
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.3567066113311122,
+              "workingSetKB": 231664,
+              "privateKB": 186088
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.13602334196717705,
+              "workingSetKB": 51868,
+              "privateKB": 13732
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 4.000925341841159,
+              "workingSetKB": 240140,
+              "privateKB": 189960
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.15731421172992305,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 66110.5,
+            "sent": 117664,
+            "received": 206898,
+            "videoSent": 114021,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 2286240,
+            "packetsLost": 0,
+            "packetsReceived": 2399,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              0
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 29,
+                "framesEncoded": 444,
+                "totalEncodeTime": 1.936,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.024155166856143204,
+              "workingSetKB": 106700,
+              "privateKB": 37592
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.35151194136899117,
+              "workingSetKB": 231280,
+              "privateKB": 185696
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.13911869235848848,
+              "workingSetKB": 51872,
+              "privateKB": 13732
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 3.764476158443038,
+              "workingSetKB": 239508,
+              "privateKB": 189244
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16403722099709403,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0.0001185117398760058,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 67323.30000000075,
+            "sent": 119793,
+            "received": 212283,
+            "videoSent": 120641,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 2344800,
+            "packetsLost": 0,
+            "packetsReceived": 2460,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              1,
+              0
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 29,
+                "framesEncoded": 480,
+                "totalEncodeTime": 2.132,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        }
+      ],
+      "summary": {
+        "electronCpuMetricSumMean": 4.614074023339298,
+        "electronWorkingSetMBMean": 800.90625,
+        "audioSentKbps": 6.317265267411409,
+        "audioReceivedKbps": 36.369634241885535,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 245,
+        "videoSentKbps": 48.23388726237907,
+        "concealedSamplesDelta": 0,
+        "jitterMsMean": 0,
+        "candidateRoundTripMsMean": 0.8
+      }
+    },
+    {
+      "name": "gaming-sharing-minimized",
+      "minimized": true,
+      "samples": [
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.01756877774857658,
+              "workingSetKB": 106728,
+              "privateKB": 37592
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.328983955589097,
+              "workingSetKB": 217876,
+              "privateKB": 172304
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.10208731060496824,
+              "workingSetKB": 51876,
+              "privateKB": 13812
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 2.265697222217645,
+              "workingSetKB": 198300,
+              "privateKB": 141380
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.1650306414855559,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 70558.80000000075,
+            "sent": 121377,
+            "received": 227487,
+            "videoSent": 143050,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 2499840,
+            "packetsLost": 0,
+            "packetsReceived": 2625,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              0,
+              0
+            ],
+            "encoded": [
+              {
+                "width": 1280,
+                "height": 720,
+                "fps": 30,
+                "framesEncoded": 575,
+                "totalEncodeTime": 2.632,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.11542973594004326,
+              "workingSetKB": 106928,
+              "privateKB": 37576
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.3298088301594875,
+              "workingSetKB": 217880,
+              "privateKB": 172264
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.11944937395450361,
+              "workingSetKB": 51872,
+              "privateKB": 13732
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 2.2108117640875546,
+              "workingSetKB": 198456,
+              "privateKB": 141432
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.15863144780940164,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 71775.60000000056,
+            "sent": 123677,
+            "received": 232756,
+            "videoSent": 147790,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 2558400,
+            "packetsLost": 0,
+            "packetsReceived": 2686,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              0,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1280,
+                "height": 720,
+                "fps": 28,
+                "framesEncoded": 610,
+                "totalEncodeTime": 2.822,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.020365369353837835,
+              "workingSetKB": 106972,
+              "privateKB": 37620
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.288204164850207,
+              "workingSetKB": 217888,
+              "privateKB": 172264
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.10016053705744145,
+              "workingSetKB": 51872,
+              "privateKB": 13732
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 1.9904704981638615,
+              "workingSetKB": 198520,
+              "privateKB": 141484
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.15650174508923237,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0.00022148672604296554,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 72988.40000000037,
+            "sent": 124738,
+            "received": 238390,
+            "videoSent": 152811,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 2616480,
+            "packetsLost": 0,
+            "packetsReceived": 2746,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              0,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1280,
+                "height": 720,
+                "fps": 26,
+                "framesEncoded": 643,
+                "totalEncodeTime": 2.993,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.01959194495141321,
+              "workingSetKB": 106988,
+              "privateKB": 37632
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.3343926922321262,
+              "workingSetKB": 217896,
+              "privateKB": 172264
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.11068548552827351,
+              "workingSetKB": 51872,
+              "privateKB": 13732
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 2.2929765945396303,
+              "workingSetKB": 198592,
+              "privateKB": 141548
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.1573459914328483,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 74205.10000000056,
+            "sent": 126111,
+            "received": 243664,
+            "videoSent": 169129,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 2675040,
+            "packetsLost": 0,
+            "packetsReceived": 2810,
+            "jitterMs": [
+              1
+            ],
+            "roundTripMs": [
+              0,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1280,
+                "height": 720,
+                "fps": 29,
+                "framesEncoded": 679,
+                "totalEncodeTime": 3.199,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.022126540994081498,
+              "workingSetKB": 106960,
+              "privateKB": 37832
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.31968092149359467,
+              "workingSetKB": 217880,
+              "privateKB": 172228
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.10528131628271524,
+              "workingSetKB": 51872,
+              "privateKB": 13732
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 2.0540361718768634,
+              "workingSetKB": 198660,
+              "privateKB": 141616
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.1550012007388656,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0.00025186296352037394,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 75420.60000000056,
+            "sent": 128567,
+            "received": 249569,
+            "videoSent": 174743,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 2733120,
+            "packetsLost": 0,
+            "packetsReceived": 2871,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              0,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1280,
+                "height": 720,
+                "fps": 29,
+                "framesEncoded": 714,
+                "totalEncodeTime": 3.379,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        }
+      ],
+      "summary": {
+        "electronCpuMetricSumMean": 2.788158716774278,
+        "electronWorkingSetMBMean": 741.6734375,
+        "audioSentKbps": 11.831009091283518,
+        "audioReceivedKbps": 36.33551359578896,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 246,
+        "videoSentKbps": 52.150232424207026,
+        "concealedSamplesDelta": 0,
+        "jitterMsMean": 0.2,
+        "candidateRoundTripMsMean": 0.4
+      }
+    },
+    {
+      "name": "restored-sharing-minimized",
+      "minimized": true,
+      "samples": [
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.017734749969909664,
+              "workingSetKB": 107300,
+              "privateKB": 38480
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.38085728182552636,
+              "workingSetKB": 217900,
+              "privateKB": 172268
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.11421032629931957,
+              "workingSetKB": 51876,
+              "privateKB": 13812
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 4.12838931773442,
+              "workingSetKB": 237744,
+              "privateKB": 191328
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.15914119294740062,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 78653.90000000037,
+            "sent": 133084,
+            "received": 264237,
+            "videoSent": 206329,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 2888640,
+            "packetsLost": 0,
+            "packetsReceived": 3033,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              0,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 31,
+                "framesEncoded": 811,
+                "totalEncodeTime": 3.926,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.027734396925443997,
+              "workingSetKB": 107216,
+              "privateKB": 38344
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.3530774411774902,
+              "workingSetKB": 217904,
+              "privateKB": 172240
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.11876279920528336,
+              "workingSetKB": 51872,
+              "privateKB": 13732
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 3.642934822983648,
+              "workingSetKB": 237800,
+              "privateKB": 191384
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.1551858061118444,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 79866,
+            "sent": 133863,
+            "received": 269949,
+            "videoSent": 213980,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 2946720,
+            "packetsLost": 0,
+            "packetsReceived": 3096,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              0,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 29,
+                "framesEncoded": 846,
+                "totalEncodeTime": 4.114,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.02041328514450492,
+              "workingSetKB": 107260,
+              "privateKB": 38388
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.3623189892869075,
+              "workingSetKB": 217912,
+              "privateKB": 172240
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.13238938496216654,
+              "workingSetKB": 51872,
+              "privateKB": 13732
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 3.5011549372541553,
+              "workingSetKB": 238168,
+              "privateKB": 191724
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.16002396870934246,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0.0001949535353900179,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 81083.5,
+            "sent": 135835,
+            "received": 275742,
+            "videoSent": 231718,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 3005280,
+            "packetsLost": 0,
+            "packetsReceived": 3157,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              0,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 30,
+                "framesEncoded": 883,
+                "totalEncodeTime": 4.29,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.018346278797473574,
+              "workingSetKB": 107272,
+              "privateKB": 38400
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.3824451339575782,
+              "workingSetKB": 217920,
+              "privateKB": 172240
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.11437125032570013,
+              "workingSetKB": 51872,
+              "privateKB": 13732
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 4.436073362451176,
+              "workingSetKB": 238236,
+              "privateKB": 191784
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.15992988708382053,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 82295.90000000037,
+            "sent": 135947,
+            "received": 281137,
+            "videoSent": 236724,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 3063360,
+            "packetsLost": 0,
+            "packetsReceived": 3218,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              0,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 31,
+                "framesEncoded": 920,
+                "totalEncodeTime": 4.51,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        },
+        {
+          "processes": [
+            {
+              "pid": 28920,
+              "type": "Browser",
+              "cpu": 0.024136712651971513,
+              "workingSetKB": 106652,
+              "privateKB": 37576
+            },
+            {
+              "pid": 19336,
+              "type": "GPU",
+              "cpu": 0.35842698901723036,
+              "workingSetKB": 217928,
+              "privateKB": 172256
+            },
+            {
+              "pid": 22652,
+              "type": "Utility",
+              "cpu": 0.13903851472111808,
+              "workingSetKB": 51872,
+              "privateKB": 13732
+            },
+            {
+              "pid": 19632,
+              "type": "Tab",
+              "cpu": 4.12665534895854,
+              "workingSetKB": 238300,
+              "privateKB": 191856
+            },
+            {
+              "pid": 16784,
+              "type": "Utility",
+              "cpu": 0.15187527292869307,
+              "workingSetKB": 81096,
+              "privateKB": 11948
+            },
+            {
+              "pid": 28828,
+              "type": "Utility",
+              "cpu": 0,
+              "workingSetKB": 103200,
+              "privateKB": 45492
+            }
+          ],
+          "media": {
+            "time": 83508.10000000056,
+            "sent": 137702,
+            "received": 286763,
+            "videoSent": 239974,
+            "concealedSamples": 0,
+            "totalSamplesReceived": 3121440,
+            "packetsLost": 0,
+            "packetsReceived": 3278,
+            "jitterMs": [
+              0
+            ],
+            "roundTripMs": [
+              0,
+              1
+            ],
+            "encoded": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "fps": 29,
+                "framesEncoded": 956,
+                "totalEncodeTime": 4.721,
+                "qualityLimitationReason": "none"
+              }
+            ]
+          }
+        }
+      ],
+      "summary": {
+        "electronCpuMetricSumMean": 4.637164480993211,
+        "electronWorkingSetMBMean": 780.53828125,
+        "audioSentKbps": 7.6107288533638044,
+        "audioReceivedKbps": 37.12413992006779,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 245,
+        "videoSentKbps": 55.4488896213567,
+        "concealedSamplesDelta": 0,
+        "jitterMsMean": 0,
+        "candidateRoundTripMsMean": 0.5
+      }
+    }
+  ]
+}

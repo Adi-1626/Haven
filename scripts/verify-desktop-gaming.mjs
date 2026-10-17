@@ -44,7 +44,7 @@ try {
   const disk = JSON.parse(await readFile(path.join(profile, 'desktop-settings.json'), 'utf8'));
   assert.equal(disk.pttShortcut, 'Control+Shift+F10');
   checks.push('desktop settings validate conflicts and persist to isolated profile');
-  const stableValues = { 'haven.media.settings': JSON.stringify({ inputDevice: '', outputDevice: '', noiseSuppression: false, echoCancellation: true, pushToTalk: true, pushToTalkKey: 'Control+Shift+F10', inputVolume: 0.75, inputSensitivity: -38, gamingMode: true }), 'haven.voice.state': JSON.stringify({ muted: true, deafened: true }), 'haven.preferences': JSON.stringify({ animateEmoji: false, notifications: false }) };
+  const stableValues = { 'haven.media.settings': JSON.stringify({ inputDevice: '', outputDevice: '', inputDeviceLabel: '', outputDeviceLabel: '', noiseSuppression: false, noiseSuppressionMode: 'enhanced', echoCancellation: true, pushToTalk: true, pushToTalkKey: 'Control+Shift+F10', inputVolume: 0.75, outputVolume: 0.65, inputSensitivity: -38, gamingMode: true, voiceBitrateKbps: 64, shareHeight: 1440, shareFps: 60, shareBitrateMbps: 12 }), 'haven.voice.state': JSON.stringify({ muted: true, deafened: true }), 'haven.preferences': JSON.stringify({ animateEmoji: false, notifications: false }) };
   await main.evaluate(values => { for (const [key, value] of Object.entries(values)) window.haven.writeClientSetting(key, value); }, stableValues);
   assert.deepEqual(await main.evaluate(keys => Object.fromEntries(keys.map(key => [key, window.haven.readClientSetting(key)])), Object.keys(stableValues)), stableValues);
   const extraPromise = instance.waitForEvent('window');
@@ -178,6 +178,12 @@ try {
   await exited;
   checks.push('actual tray Quit exits the process despite close-to-tray enabled');
   console.log(JSON.stringify({ pass: true, checks, continuity: { before, after }, settingsOrigins: { firstOrigin, secondOrigin }, limitations: ['synthetic microphone, not physical acoustic routing', 'fullscreen test window is not a game or anti-cheat compatibility test', 'tray menu invoked programmatically, no physical tray click or user startup registry changed; startup registry API covered with unit doubles', 'no external network or competitive game load generated'] }, null, 2));
+} catch (error) {
+  const state = await instance?.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({ title: window.getTitle(), visible: window.isVisible(), focused: window.isFocused(), minimized: window.isMinimized() }))).catch(() => null);
+  const pages = instance?.windows() ?? [];
+  const events = await Promise.all(pages.map(page => page.evaluate(async () => ({ events: window.desktopTestEvents, desktop: await window.haven?.getDesktopSettings() })).catch(() => null)));
+  console.error(JSON.stringify({ failed: error.message, completedChecks: checks, windows: state, events }, null, 2));
+  throw error;
 } finally {
   await nativeKeys([[0x79, true], [0x7A, true], [0x7B, true], [0x11, true], [0x10, true], [0xA2, true], [0xA3, true], [0xA0, true], [0xA1, true]]).catch(() => {});
   await instance?.close().catch(() => {});

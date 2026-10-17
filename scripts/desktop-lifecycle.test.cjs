@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
-const { liveWindowContents, trustedClientEvent } = require('../electron/client-access.cjs');
+const electronDir = fs.existsSync(path.resolve(__dirname, '../apps/desktop/electron')) ? path.resolve(__dirname, '../apps/desktop/electron') : path.resolve(__dirname, '../electron');
+const { liveWindowContents, trustedClientEvent } = require(path.join(electronDir, 'client-access.cjs'));
 
 test('desktop IPC ignores queued requests after the main window is destroyed', async () => {
   const listeners = new Map();
@@ -28,7 +29,7 @@ test('desktop IPC ignores queued requests after the main window is destroyed', a
   const application = new EventEmitter();
   Object.assign(application, { setName: () => {}, getPath: () => __dirname, whenReady: () => Promise.resolve(), quit: () => {} });
   const electron = { app: application, BrowserWindow: FakeWindow, ipcMain: { on: (name, listener) => listeners.set(name, listener), handle: (name, handler) => handlers.set(name, handler) }, powerMonitor: new EventEmitter() };
-  const directory = path.resolve(__dirname, '../electron');
+  const directory = electronDir;
   const sandbox = {
     __dirname: directory, console, URL, setTimeout,
     process: { env: {}, argv: ['electron', '.', '--server=http://127.0.0.1:3107'] },
@@ -44,6 +45,17 @@ test('desktop IPC ignores queued requests after the main window is destroyed', a
   assert.equal(written.length, 1);
   await handlers.get('client:test')(event);
   const independent = windows[1];
+  for (const denied of [
+    { sender: independent.contents, senderFrame: independent.contents.mainFrame },
+    { sender: main.contents, senderFrame: {} },
+  ]) {
+    listeners.get('desktop:client-setting-write')(denied, 'setting', 'unauthorized');
+    assert.equal(denied.returnValue.ok, false);
+    listeners.get('desktop:client-setting-status')(denied, 'haven.media.settings');
+    assert.equal(denied.returnValue.canPersist, false);
+    assert.equal(denied.returnValue.value, null);
+  }
+  assert.equal(written.length, 1);
   main.destroyed = true;
   assert.throws(() => main.webContents, /Object has been destroyed/);
   for (const sender of [main.contents, independent.contents]) {

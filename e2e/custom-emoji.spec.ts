@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import type { Bootstrap, ServerEmoji } from '../shared/types';
+import type { Bootstrap, ServerEmoji } from '@haven/shared/types';
 
 const animatedGif = Buffer.from('47494638396101000100800000000000ffffff21ff0b4e45545343415045322e30030100000021f904000a0000002c000000000100010000020244010021f904000a0000002c00000000010001000002024c01003b', 'hex');
 
@@ -62,7 +62,7 @@ test('custom static and animated emoji upload, sync, picker, reactions, rename a
     await expect(ownerEmoji.locator('img')).toHaveAttribute('src', dancing.staticUrl);
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await expect(ownerEmoji.locator('img')).toHaveAttribute('src', dancing.url);
-    await page.getByRole('button', { name: 'User settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('button', { name: 'desktop & gaming', exact: true }).click();
     await page.getByLabel('Low-resource gaming mode', { exact: true }).check();
     await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
