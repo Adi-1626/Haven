@@ -5,17 +5,19 @@ import { Avatar, Modal } from './components';
 import { ProfileActions } from './Friends';
 import { profileImageSource } from './profile-images';
 import { copyWithFeedback } from './clipboard';
+import { resolveApiUrl } from './api';
 
 export function ImageViewer({ source, name, onClose }: { source: string; name: string; onClose: () => void }) {
   const [actualSize, setActualSize] = useState(false);
   const [failed, setFailed] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const resolved = resolveApiUrl(source);
   useEffect(() => { setFailed(false); setSize({ width: 0, height: 0 }); }, [source]);
   return <Modal title={`${name} — original picture`} wide onClose={onClose}>
     <div className={`profile-image-viewer ${actualSize ? 'actual-size' : ''}`}>
-      {failed ? <p role="alert">This image could not be loaded. Its host may block external viewing or the URL may have expired.</p> : <img src={source} alt={`${name}'s full profile picture`} referrerPolicy="no-referrer" onLoad={event => setSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailed(true)} />}
+      {failed ? <p role="alert">This image could not be loaded. Its host may block external viewing or the URL may have expired.</p> : <img src={resolved} alt={`${name}'s full profile picture`} referrerPolicy="no-referrer" onLoad={event => setSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailed(true)} />}
     </div>
-    <div className="image-viewer-actions"><span>{size.width > 0 && `${size.width} × ${size.height} · Original supplied image`}</span><button type="button" className="secondary" disabled={failed} onClick={() => setActualSize(value => !value)}>{actualSize ? 'Fit to window' : 'Actual size'}</button><a href={source} target="_blank" rel="noreferrer">Open original <ExternalLink size={14} aria-hidden="true" /></a></div>
+    <div className="image-viewer-actions"><span>{size.width > 0 && `${size.width} × ${size.height} · Original supplied image`}</span><button type="button" className="secondary" disabled={failed} onClick={() => setActualSize(value => !value)}>{actualSize ? 'Fit to window' : 'Actual size'}</button><a href={resolved} target="_blank" rel="noreferrer">Open original <ExternalLink size={14} aria-hidden="true" /></a></div>
     <p className="quiet">Haven uses the original URL, without requesting a thumbnail. A small source cannot become a higher-resolution image.</p>
   </Modal>;
 }

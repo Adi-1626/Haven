@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Shield, Upload, X } from 'lucide-react';
 import type { Role, Server, ServerEmoji, User } from '@haven/shared/types';
-import { api } from './api';
+import { api, resolveApiUrl } from './api';
 import { copyWithFeedback } from './clipboard';
 import { Avatar } from './components';
 import { InviteCreate } from './Invitations';
@@ -13,7 +13,7 @@ export interface CommunityMember { user: User; role: Role; serverMuted?: boolean
 export function ServerIcon({ server }: { server: Pick<Server, 'name' | 'icon'> }) {
   const source = profileImageSource(server.icon, true);
   const [failed, setFailed] = useState<string | null>(null);
-  return <span className="community-icon">{source && failed !== source ? <img key={source} src={source} alt="" referrerPolicy="no-referrer" decoding="async" onError={() => setFailed(source)} /> : profileFallback(server.icon, server.name)}</span>;
+  return <span className="community-icon">{source && failed !== source ? <img key={source} src={resolveApiUrl(source)} alt="" referrerPolicy="no-referrer" decoding="async" onError={() => setFailed(source)} /> : profileFallback(server.icon, server.name)}</span>;
 }
 
 export default function ServerSettings({ server, members, emojis, me, onChanged, onLeft, notify }: { server: Server; members: CommunityMember[]; emojis: ServerEmoji[]; me: User; onChanged: () => void | Promise<unknown>; onLeft: () => void; notify: (message: string) => void }) {

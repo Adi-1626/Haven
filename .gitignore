@@ -14,8 +14,13 @@ playwright-report/
 .env.*
 !.env.example
 !.env.hosted.example
+!.env.voroa.example
+!.env.cloudflare.example
+!.env.*.example
+!apps/*/.env*.example
 .hosted-profile/
 release/
 *.log
+
 
 

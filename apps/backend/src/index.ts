@@ -24,7 +24,7 @@ if (envFile) {
     console.error(`FATAL: Specified environment file "${envFile}" does not exist. Please copy .env.hosted.example to ${envFile} and configure your Supabase credentials.`);
     process.exit(1);
   }
-} else {
+} else if (process.env.NODE_ENV !== 'production') {
   for (const envPath of ['.env', '../../.env', '../.env']) {
     if (existsSync(envPath)) {
       try { loadEnvFile(envPath); break; } catch {}
@@ -51,7 +51,7 @@ if (isHosted) {
     process.exit(1);
   }
   if (dbUrl.includes('[YOUR') || dbUrl.includes('[YOUR-DB-PASSWORD]')) {
-    console.error('FATAL: DATABASE_URL in .env.hosted still contains placeholder text "[YOUR-DB-PASSWORD]". Please edit .env.hosted and replace it with your real Supabase database password.');
+    console.error('FATAL: DATABASE_URL in environment still contains placeholder text. Please provide your real Supabase database connection URL.');
     process.exit(1);
   }
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -71,13 +71,17 @@ if (isHosted) {
     process.exit(1);
   }
   if (supabaseServiceKey.includes('[YOUR') || supabaseServiceKey.includes('YOUR_')) {
-    console.error('FATAL: SUPABASE_SERVICE_ROLE_KEY in .env.hosted contains a placeholder. Please replace it with your real secret service_role key from Supabase Dashboard -> Project Settings -> API Keys.');
+    console.error('FATAL: SUPABASE_SERVICE_ROLE_KEY in environment contains a placeholder. Please configure your real secret service_role key from Supabase Dashboard -> Project Settings -> API Keys.');
     process.exit(1);
   }
 }
 
 const instance = createApp({
   dataDir: process.env.DATA_DIR,
+  databaseUrl: process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL,
+  supabaseUrl: process.env.SUPABASE_URL,
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY,
+  supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY,
   origins,
   publicUrl: process.env.PUBLIC_URL,
   serveStatic: process.env.SERVE_STATIC === 'true',

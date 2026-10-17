@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Check, Copy, Link, Shield, Trash2 } from 'lucide-react';
-import { api, getApiBaseUrl } from './api';
+import { api, getApiBaseUrl, resolveApiUrl } from './api';
 import { copyWithFeedback } from './clipboard';
 import { isLoopback, parseInvitation } from './invite-links';
 import type { Server } from '@haven/shared/types';
 import { profileFallback, profileImageSource } from './profile-images';
 
 function InvitationIcon({ icon, name }: { icon: string; name: string }) {
-  const source = profileImageSource(icon);
+  const source = profileImageSource(icon, true);
   const [failed, setFailed] = useState<string | null>(null);
-  return <span className="invited-community-icon">{source && source !== failed ? <img src={source} alt="" referrerPolicy="no-referrer" onError={() => setFailed(source)} /> : profileFallback(icon, name)}</span>;
+  return <span className="invited-community-icon">{source && source !== failed ? <img src={resolveApiUrl(source)} alt="" referrerPolicy="no-referrer" onError={() => setFailed(source)} /> : profileFallback(icon, name)}</span>;
 }
 
 interface Preview { community: { name: string; icon: string }; expiresAt: number | null }
