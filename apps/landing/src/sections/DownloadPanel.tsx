@@ -109,7 +109,7 @@ export function DownloadPanel() {
         <div className="checksum">
           <p className="checksum-label">Verify your download (PowerShell)</p>
           <div className="checksum-row">
-            <code>{verify}</code>
+            <code tabIndex={0}>{verify}</code>
             <button type="button" className="icon-button" onClick={copy}>
               {copied ? <Check size={16} strokeWidth={2} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.75} aria-hidden="true" />}
               <span className="sr-only">{copied ? 'Copied' : 'Copy command'}</span>

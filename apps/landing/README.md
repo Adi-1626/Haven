@@ -27,13 +27,13 @@ Building needs the monorepo checkout, because the orbital scene is imported from
 
 ## Publishing the Windows installer
 
-`src/config.ts` → `WINDOWS_RELEASE` is the only switch. While `status` is `'pending'` the site shows **Installer coming soon**, a disabled download button and the browser app as the primary action; no `.exe` link exists. When the approved `Haven-Setup.exe` is attached to a published GitHub release:
+`src/config.ts` → `WINDOWS_RELEASE` is the only switch. It is `'available'` for Haven 1.0.0: every Windows download links directly to `https://github.com/Adi-1626/Haven/releases/download/v1.0.0/Haven-Setup.exe`, and the download panel shows the published SHA-256 with a PowerShell command to verify it. For a later release:
 
-1. Set `status: 'available'`, plus `version`, `size` and `sha256` from the published asset.
+1. Update `url`, `version`, `size`, `sha256` and `notesUrl` from the newly published asset; the asset name must stay exactly `Haven-Setup.exe`.
 2. Keep `signed: false` unless the published installer is code-signed (it controls the SmartScreen guidance in the download panel and FAQ).
-3. Rebuild and run the suite; update the "honest primary actions" test, which asserts the pending state.
+3. Rebuild and run the suite; update the installer URL and checksum in the "honest primary actions" test.
 
-Downloads use `https://github.com/Adi-1626/Haven/releases/latest/download/Haven-Setup.exe`, so the asset name must stay exactly `Haven-Setup.exe`.
+Setting `status: 'pending'` again restores **Installer coming soon**, a disabled download button and no `.exe` link.
 
 ## Boundaries
 

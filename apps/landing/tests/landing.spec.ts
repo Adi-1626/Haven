@@ -2,6 +2,8 @@ import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 const APP_URL = 'https://haven-ea6.pages.dev';
+const INSTALLER_URL = 'https://github.com/Adi-1626/Haven/releases/download/v1.0.0/Haven-Setup.exe';
+const INSTALLER_SHA256 = '76bb06a6cf3a8fd005bc125a7cebfa87a32ddec956961272b6a72f0eab63dd52';
 const WIDTHS = [320, 360, 375, 390, 430, 600, 768, 800, 900, 1024, 1100, 1280, 1366, 1440, 1920, 2560];
 
 async function settle(page: Page) {
@@ -15,7 +17,7 @@ async function arrived(page: Page, headingId: string) {
   await expect(page.locator('html')).not.toHaveAttribute('data-travel', /.*/);
 }
 
-test('primary actions are honest: hosted app, no installer before it is published', async ({ page }) => {
+test('primary actions are honest: hosted app and the published v1.0.0 installer', async ({ page }) => {
   await settle(page);
   const open = page.getByRole('link', { name: /^Open Haven/ });
   expect(await open.count()).toBeGreaterThanOrEqual(3);
@@ -24,9 +26,11 @@ test('primary actions are honest: hosted app, no installer before it is publishe
   }
   const hrefs = await page.locator('a[href]').evaluateAll(links => links.map(link => (link as HTMLAnchorElement).href));
   expect(hrefs.filter(href => /localhost|127\.0\.0\.1:(?!4184)/.test(href))).toEqual([]);
-  expect(hrefs.filter(href => href.endsWith('.exe'))).toEqual([]);
-  await expect(page.getByRole('button', { name: 'Download Haven-Setup.exe' })).toBeDisabled();
-  await expect(page.locator('#download')).toContainText('Installer coming soon');
+  expect([...new Set(hrefs.filter(href => href.endsWith('.exe')))]).toEqual([INSTALLER_URL]);
+  await expect(page.getByRole('link', { name: 'Download for Windows' }).first()).toHaveAttribute('href', INSTALLER_URL);
+  await expect(page.getByRole('link', { name: 'Download Haven-Setup.exe' })).toHaveAttribute('href', INSTALLER_URL);
+  await expect(page.locator('#download')).toContainText('Version 1.0.0');
+  await expect(page.locator('#download code')).toContainText(INSTALLER_SHA256.toUpperCase());
   await expect(page.getByRole('link', { name: /All releases on GitHub/ })).toHaveAttribute('href', 'https://github.com/Adi-1626/Haven/releases');
 });
 
@@ -42,7 +46,7 @@ test('destinations fly the camera and land focus on the section heading', async 
   await arrived(page, 'faq-title');
   await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'FAQ' })).toHaveAttribute('aria-current', 'location');
 
-  await page.getByRole('link', { name: /Windows app\s*coming soon/i }).first().click();
+  await page.getByRole('navigation', { name: 'Get Haven' }).getByRole('link', { name: 'Windows app' }).click();
   await expect(page.locator('#download')).toBeFocused({ timeout: 6000 });
   await expect(page).toHaveURL(/#download$/);
 });
