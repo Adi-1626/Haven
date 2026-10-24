@@ -4,6 +4,15 @@ Status: LOCAL PREPARATION ONLY, 18 October 2026. No live SQL, migrations, backfi
 configuration changes, account changes or deployment were performed in this preparation stage.
 Target for a later approved rollout: Mumbai project `tswmpzeckmquvrlzvtsy`.
 
+> **Executed, 24 October 2026.** With approval, `20261018145338_trusted_profile_onboarding` and
+> `20261021180000_auth_session_check` were applied to production through the Supabase MCP migration
+> runner, which owns the transaction, so the files' own `BEGIN`/`COMMIT` were removed. History records them as
+> `20261024094331` and `20261024094349`. The history table does not list `20261016000001`..`04` under
+> their file versions; the catalog matches their end state. Production `haven.users` was empty, so W4
+> (backfill) and the postflight's backfill checks did not apply. The Voroa backend (`3779d6b`) then
+> reported `sessionRevocation: "enforced"`. The trigger rollback capture is kept outside Git. The sections
+> below are the preparation record.
+
 ## Mode separation (owner decision, 21 October 2026)
 
 Local Mode and Hosted Mode are separate products that share code, not data.

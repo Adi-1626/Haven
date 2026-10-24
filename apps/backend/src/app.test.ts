@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { io as socketClient, type Socket } from 'socket.io-client';
-import { createApp } from './app.js';
+import { createApp, HAVEN_VERSION } from './app.js';
 
 async function fixture() {
   const directory = mkdtempSync(path.join(tmpdir(), 'haven-test-'));
@@ -23,6 +23,24 @@ async function fixture() {
     close: async () => { await instance.close(); rmSync(directory, { recursive: true, force: true }); },
   };
 }
+
+test('one release version across manifests, lockfile and health endpoints', async () => {
+  const manifest = (relative: string) => JSON.parse(readFileSync(new URL(`../../../${relative}`, import.meta.url), 'utf8'));
+  const release = manifest('package.json').version;
+  for (const workspace of ['apps/backend', 'apps/web', 'apps/desktop', 'apps/landing', 'packages/shared']) assert.equal(manifest(`${workspace}/package.json`).version, release, workspace);
+  const lock = manifest('package-lock.json');
+  assert.equal(lock.version, release);
+  for (const [location, entry] of Object.entries(lock.packages as Record<string, { version?: string }>)) if (location === '' || /^(apps|packages)\/[^/]+$/.test(location)) assert.equal(entry.version, release, `package-lock ${location || 'root'}`);
+  assert.equal(HAVEN_VERSION, release);
+  const context = await fixture();
+  try {
+    assert.equal((await context.request('/health')).data.version, release);
+    assert.equal((await (await fetch(`${context.base}/health`)).json() as any).version, release);
+    assert.equal((await (await fetch(`${context.base}/`, { headers: { Accept: 'application/json' } })).json() as any).version, release);
+  } finally {
+    await context.close();
+  }
+});
 
 test('accounts, sessions, channels, history and edits persist across restart', async () => {
   const context = await fixture();

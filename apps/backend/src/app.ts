@@ -3,7 +3,7 @@ import { normalizeLoginUsername, usernameExpression, usernameProblem } from '@ha
 import { createServer } from 'node:http';
 import { randomBytes, randomUUID, scrypt, timingSafeEqual, createHash } from 'node:crypto';
 import path from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import multer from 'multer';
 import { Server as SocketServer, type Socket } from 'socket.io';
 import { z } from 'zod';
@@ -18,6 +18,8 @@ type AuthRequest = Request & { userId?: string; profile?: User; viaSupabase?: bo
 class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 /** The socket's session ended: acknowledge with this error first, then disconnect, so the client learns why. */
 class SessionEnded extends ApiError { constructor() { super(401, 'Session expired'); } }
+// Every layout (source, build, Docker, standalone, packaged desktop) has the release manifest one level above src/build.
+export const HAVEN_VERSION: string = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 const id = () => randomUUID();
 const now = () => Date.now();
 const text = (maximum: number) => z.string().trim().min(1).max(maximum);
@@ -362,8 +364,8 @@ export function createApp({
   });
   app.use(express.json({ limit: '128kb' }));
 
-  app.get('/health', (_request, response) => response.json({ ok: true, version: '0.4.1' }));
-  app.get('/api/health', (_request, response) => response.json({ ok: true, version: '0.4.1', ...(configuredPublicUrl ? { webUrl: configuredPublicUrl } : {}) }));
+  app.get('/health', (_request, response) => response.json({ ok: true, version: HAVEN_VERSION }));
+  app.get('/api/health', (_request, response) => response.json({ ok: true, version: HAVEN_VERSION, ...(configuredPublicUrl ? { webUrl: configuredPublicUrl } : {}) }));
   // Readiness, unlike liveness (/api/health), proves the database answers. Use it for platform health
   // checks and deploy postflight; it reports whether durable hosted logout enforcement is installed.
   app.get('/api/ready', async (_request, response) => {
@@ -374,7 +376,7 @@ export function createApp({
       const sessionRevocation = isHostedMode && db.isAuthSessionActive
         ? (await db.isAuthSessionActive('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000').catch(() => undefined)) === undefined ? 'unavailable' : 'enforced'
         : undefined;
-      response.json({ ok: true, version: '0.4.1', database: 'ok', ...(sessionRevocation ? { sessionRevocation } : {}) });
+      response.json({ ok: true, version: HAVEN_VERSION, database: 'ok', ...(sessionRevocation ? { sessionRevocation } : {}) });
     } catch {
       response.status(503).json({ ok: false, database: 'unavailable' });
     }
@@ -1590,7 +1592,7 @@ export function createApp({
       return response.json({
         ok: true,
         service: 'Haven Backend',
-        version: '0.4.1',
+        version: HAVEN_VERSION,
         health: '/api/health',
         ...(configuredPublicUrl ? { web: configuredPublicUrl } : {}),
       });

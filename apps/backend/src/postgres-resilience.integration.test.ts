@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import pg from 'pg';
-import { createApp } from './app.js';
+import { createApp, HAVEN_VERSION } from './app.js';
 import { PostgresAdapter } from './db/postgres.js';
 
 // Real PostgreSQL. Requires HAVEN_TEST_POSTGRES_URL pointing at a disposable loopback server.
@@ -36,7 +36,7 @@ test('terminated pooled connections do not crash the backend and requests recove
     };
     const base = await start(url.href);
     const ready = async (target: string) => { const response = await fetch(`${target}/api/ready`); return { status: response.status, data: await response.json() as any }; };
-    assert.deepEqual(await ready(base), { status: 200, data: { ok: true, version: '0.4.1', database: 'ok' } });
+    assert.deepEqual(await ready(base), { status: 200, data: { ok: true, version: HAVEN_VERSION, database: 'ok' } });
 
     // Idle pooled connections terminated by a restart/failover/pooler recycle (SQLSTATE 57P01).
     const terminated = await admin.query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND application_name = 'haven-resilience'", [database]);

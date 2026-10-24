@@ -6,7 +6,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { io, type Socket } from 'socket.io-client';
-import { createApp } from './app.js';
+import { createApp, HAVEN_VERSION } from './app.js';
 import { PostgresAdapter } from './db/postgres.js';
 import { SupabaseAuthVerifier } from './auth/supabase.js';
 
@@ -142,7 +142,7 @@ test('H-01 rehearsal: preflight, migrations, backfill, postflight, durable logou
     // A backend deployed too early: legacy rows get a non-mutating 503; durable logout is not yet available.
     const early = await start();
     assert.equal((await early.call('/bootstrap', await signIn(approved[0].id))).status, 503);
-    assert.deepEqual((await early.call('/ready')).data, { ok: true, version: '0.4.1', database: 'ok', sessionRevocation: 'unavailable' });
+    assert.deepEqual((await early.call('/ready')).data, { ok: true, version: HAVEN_VERSION, database: 'ok', sessionRevocation: 'unavailable' });
     assert.deepEqual(await snapshot(), original);
     await early.instance.close(); instances.length = 0;
 

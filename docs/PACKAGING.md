@@ -124,3 +124,19 @@ The runtime still opens the actual Hosted authentication app, with no landing pa
 SQLite data. The deployed Hosted frontend remains older than the source planetary authentication,
 onboarding, refresh and opt-in stream protocol. A coordinated, approved web/backend/database rollout
 and production acceptance remain separate release gates; rebuilding the installer cannot satisfy them.
+
+## Version 1.0.0 — 24 October 2026
+
+All workspace manifests and the lockfile are **1.0.0**. Electron, the NSIS installer (Apps & Features
+`DisplayVersion`) and `Haven.exe` file/product version (`1.0.0.0`) take it from the root `package.json`;
+the backend reports it from its own manifest on `/health`, `/api/health`, `/api/ready` and `/`. The UI
+shows no version badge. No 1.0.0 portable bundle or installer has been built yet; every 0.4.1 candidate
+above remains unpublishable. Build into the default, new directories:
+
+```powershell
+npm ci
+npm run package:win
+npm run verify:installer
+```
+
+This produces `release/Haven-1.0.0-win32-x64` and `release/Haven-1.0.0-installer/Haven-Setup.exe`.
