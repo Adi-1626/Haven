@@ -28,12 +28,40 @@ test('private media authenticates, surfaces API failures and never sends tokens 
     await fetchResource('https://external.example/api/picture');
     await fetchResource('data:image/png;base64,AAAA');
     assert.deepEqual(requests, [
-      { url: 'https://haven-api.example/api/sounds/one/audio', authorization: 'Bearer private-test-token', credentials: 'include' },
+      // Hosted files redirect to signed Storage URLs (`Access-Control-Allow-Origin: *`), which a
+      // credentialed request cannot follow. The bearer token authenticates; cookies are omitted.
+      { url: 'https://haven-api.example/api/sounds/one/audio', authorization: 'Bearer private-test-token', credentials: 'omit' },
       { url: 'https://external.example/api/picture', authorization: null, credentials: 'omit' },
       { url: 'data:image/png;base64,AAAA', authorization: null, credentials: 'omit' },
     ]);
     globalThis.fetch = async () => Response.json({ error: 'Server permission denied' }, { status: 403 });
     await assert.rejects(fetchResource('/api/attachments/one'), /Server permission denied/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    resetAuthClientForTesting();
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
+test('cookie-authenticated Local Mode includes credentials for private media only', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: { origin: 'http://127.0.0.1:3107', hostname: '127.0.0.1' } } });
+  resetAuthClientForTesting();
+  try {
+    const requests: { url: string; authorization: string | null; credentials?: RequestCredentials }[] = [];
+    globalThis.fetch = (async (input, init) => {
+      if (String(input).endsWith('/api/config')) return Response.json({ mode: 'local' });
+      requests.push({ url: String(input), authorization: new Headers(init?.headers).get('Authorization'), credentials: init?.credentials });
+      return Response.json({ ok: true });
+    }) as typeof fetch;
+    await fetchResource('/api/sounds/one/audio');
+    await fetchResource('https://external.example/api/picture');
+    assert.deepEqual(requests, [
+      { url: '/api/sounds/one/audio', authorization: null, credentials: 'include' },
+      { url: 'https://external.example/api/picture', authorization: null, credentials: 'omit' },
+    ]);
   } finally {
     globalThis.fetch = previousFetch;
     resetAuthClientForTesting();

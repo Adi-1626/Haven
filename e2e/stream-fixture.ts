@@ -25,10 +25,11 @@ export async function streamFixture() {
     import StreamViewer from '/src/StreamViewer.tsx';
     window.__HAVEN_CONFIG__={apiUrl:'${apiOrigin}'};
     const qa=window.qa; qa.errors=[];
-    qa.socket=io('${apiOrigin}',{withCredentials:true,transports:['websocket'],reconnectionDelay:100,reconnectionDelayMax:500});
+    // ?socket= routes signaling through another address (a proxy that can cut the network).
+    qa.socket=io(new URLSearchParams(location.search).get('socket')||'${apiOrigin}',{withCredentials:true,transports:['websocket'],reconnectionDelay:100,reconnectionDelayMax:500});
     function Probe(){
       const [viewer,setViewer]=React.useState(null);
-      qa.media=useMedia(qa.socket,qa.userId,message=>qa.errors.push(message));
+      qa.media=useMedia(qa.socket,qa.userId,message=>qa.errors.push(message),qa.account);
       qa.showViewer=id=>setViewer(id);
       const peer=qa.media.peers.find(p=>p.socketId===viewer);
       return peer?.stream?.getVideoTracks().length ? React.createElement(StreamViewer,{

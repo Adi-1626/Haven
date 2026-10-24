@@ -3,6 +3,9 @@ import { api, fetchResource } from './api';
 
 const MUTED_USERS_KEY = 'haven.muted-soundboard-users';
 const ENTRY_SOUNDS_KEY = 'haven.entry-sounds';
+const resumeWaitMs = 500;
+const cueCollapseMs = 300;
+const cueVolume = 0.2;
 
 export interface SoundboardState {
   volume: number; // 0.0 to 1.0
@@ -19,6 +22,7 @@ export class SoundboardService {
   private generation = 0;
   private playbackSettings: { volume: number; isMuted: boolean; outputVolume: number; outputDeviceId?: string } | null = null;
   private sourceUsers = new Map<GainNode, string | undefined>();
+  private lastCue = new Map<'join' | 'leave', number>();
 
   updatePlaybackSettings(settings: { volume: number; isMuted: boolean; outputVolume: number; outputDeviceId?: string }): void {
     this.playbackSettings = settings;
@@ -142,9 +146,46 @@ export class SoundboardService {
       this.audioContext = new AudioCtx({ latencyHint: 'interactive' });
     }
     if (this.audioContext.state === 'suspended') {
-      await this.audioContext.resume().catch(() => {});
+      // Without user activation resume() stays pending until the next gesture. Waiting on it
+      // would queue every event and release them as a burst of stale sounds later.
+      await Promise.race([this.audioContext.resume().catch(() => {}), new Promise(resolve => setTimeout(resolve, resumeWaitMs))]);
     }
     return this.audioContext;
+  }
+
+  /**
+   * Short synthesized join/leave cue on the same routed output as soundboard playback.
+   * Cues of one kind within a short window collapse into one (several peers leaving at once).
+   */
+  async playCue(kind: 'join' | 'leave', options: { outputVolume?: number; outputDeviceId?: string }): Promise<boolean> {
+    const started = performance.now();
+    if (started - (this.lastCue.get(kind) ?? -Infinity) < cueCollapseMs) return false;
+    this.lastCue.set(kind, started);
+    const level = Math.max(0, Math.min(1, (options.outputVolume ?? 1) * cueVolume));
+    if (!level || !Number.isFinite(level)) return false;
+    try {
+      const ctx = await this.getAudioContext();
+      if ((ctx as any).setSinkId) await (ctx as any).setSinkId(options.outputDeviceId || '').catch(() => {});
+      if (ctx.state !== 'running') return false;
+      const [first, second] = kind === 'join' ? [659.25, 880] : [880, 587.33];
+      const at = ctx.currentTime + 0.01;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(level, at + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.26);
+      const tone = ctx.createOscillator();
+      tone.type = 'sine';
+      tone.frequency.setValueAtTime(first, at);
+      tone.frequency.setValueAtTime(second, at + 0.11);
+      tone.connect(gain).connect(ctx.destination);
+      tone.onended = () => { try { tone.disconnect(); gain.disconnect(); } catch {} };
+      tone.start(at);
+      tone.stop(at + 0.28);
+      return true;
+    } catch (err) {
+      console.warn('[SoundboardService] Cue failed:', err);
+      return false;
+    }
   }
 
   /**
@@ -181,7 +222,8 @@ export class SoundboardService {
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
-      if (ctx.state === 'closed' || operation !== this.generation) return false;
+      // A context that could not start would hold the sound and play it whenever it resumes.
+      if (ctx.state !== 'running' || operation !== this.generation) return false;
       const effectiveGain = this.effectiveGain(currentOptions(), userId);
       if (effectiveGain <= 0) return false;
 

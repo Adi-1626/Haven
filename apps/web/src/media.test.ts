@@ -118,6 +118,8 @@ function environment(saved = new Map<string, string>()) {
   const events: string[] = [];
   const failures: string[] = [];
   const peerList: { socketId: string; user: { id: string; name: string } }[] = [];
+  const signals: any[] = [];
+  const control: { signalAck?: (payload: any) => unknown } = {};
   let microphoneCalls = 0;
   const mediaDevices = {
     getUserMedia: async () => { microphoneCalls++; return microphone; },
@@ -131,6 +133,10 @@ function environment(saved = new Map<string, string>()) {
       events.push(event);
       const callback = args.at(-1);
       if (event === 'voice:join' && typeof callback === 'function') callback(null, { peers: peerList.map(peer => ({ ...peer, streamProtocol: 1 })), capabilities: { streamSubscriptions: 1 } });
+      if (event === 'voice:signal') {
+        signals.push(args[0]);
+        if (control.signalAck && typeof callback === 'function') callback(null, control.signalAck(args[0]));
+      }
     },
   };
   const rtcResponse = { ok: true, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ iceServers: [] }), arrayBuffer: async () => new ArrayBuffer(8) };
@@ -146,7 +152,7 @@ function environment(saved = new Map<string, string>()) {
   function Probe() { media = useMedia(fakeSocket as unknown as Socket, 'user', message => failures.push(message)); return null; }
   renderToString(createElement(Probe));
   return {
-    media, microphone, screen, events, failures, mediaDevices, rtcResponse, peerList,
+    media, microphone, screen, events, failures, mediaDevices, rtcResponse, peerList, signals, control,
     microphoneCalls: () => microphoneCalls,
     restore() {
       resetAuthClientForTesting();
@@ -240,6 +246,7 @@ test('ICE retries report exhaustion once, reset after recovery and stop on leave
     const connection = FakeConnection.instances[0] as any;
     let restarts = 0;
     connection.restartIce = () => { restarts++; };
+    Object.assign(connection, { localDescription: { sdp: '' }, remoteDescription: { sdp: '' }, signalingState: 'stable' });
     connection.connectionState = 'failed';
     connection.onconnectionstatechange();
     for (const delay of [2000, 4000, 8000, 16000, 30000]) context.mock.timers.tick(delay);
@@ -497,4 +504,155 @@ test('malformed stored microphone policy and mute state fail closed before voice
       else assert.equal(setup.media.muted, true);
     } finally { setup.restore(); }
   }
+});
+
+const flush = () => new Promise(resolve => setImmediate(resolve));
+function negotiated(connection: any, signalingState = 'stable') {
+  Object.assign(connection, { localDescription: { sdp: 'v=0\r\na=ice-ufrag:local1\r\n' }, remoteDescription: { sdp: 'v=0\r\na=ice-ufrag:remote1\r\n' }, signalingState });
+}
+
+test('ICE stuck in checking restarts after the checking limit, a bounded number of times', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  const setup = environment();
+  try {
+    setup.media.setSettings({ noiseSuppression: false });
+    setup.peerList.push({ socketId: 'remote', user: { id: 'remote-user', name: 'Remote' } });
+    await setup.media.join('checking-room');
+    const connection = FakeConnection.instances[0] as any;
+    let restarts = 0;
+    connection.restartIce = () => { restarts++; };
+    negotiated(connection);
+    // Lost candidates leave ICE checking indefinitely without ever reporting failed.
+    connection.connectionState = 'connecting';
+    context.mock.timers.tick(11_000);
+    assert.equal(restarts, 0);
+    for (let second = 0; second < 240; second++) context.mock.timers.tick(1000);
+    assert.equal(restarts, 5);
+    assert.equal(setup.failures.length, 1);
+    assert.match(setup.failures[0], /Could not restore.*Remote/);
+    for (let second = 0; second < 120; second++) context.mock.timers.tick(1000);
+    assert.equal(restarts, 5);
+  } finally { setup.restore(); context.mock.timers.reset(); }
+});
+
+test('a lost first offer is recovered by offering from the side that was waiting for it', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  const setup = environment();
+  try {
+    setup.media.setSettings({ noiseSuppression: false });
+    setup.peerList.push({ socketId: 'remote', user: { id: 'remote-user', name: 'Remote' } });
+    await setup.media.join('lost-offer-room');
+    const connection = FakeConnection.instances[0] as any;
+    connection.connectionState = 'new';
+    connection.createOffer = async () => ({ type: 'offer', sdp: 'v=0\r\na=ice-ufrag:local1\r\n' });
+    connection.setLocalDescription = async (description: RTCSessionDescriptionInit) => { connection.localDescription = { ...description, toJSON: () => description }; };
+    // Existing members offer to a joiner; the joiner does not offer on its own initially.
+    connection.onnegotiationneeded();
+    await flush();
+    assert.equal(setup.signals.length, 0);
+    context.mock.timers.tick(12_000); context.mock.timers.tick(2000);
+    await flush();
+    assert.equal(setup.signals.length, 1);
+    assert.equal(setup.signals[0].target, 'remote');
+    assert.equal(setup.signals[0].description.type, 'offer');
+  } finally { setup.restore(); context.mock.timers.reset(); }
+});
+
+test('an offer whose answer never arrived is rolled back before ICE restarts', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  const setup = environment();
+  try {
+    setup.media.setSettings({ noiseSuppression: false });
+    setup.peerList.push({ socketId: 'remote', user: { id: 'remote-user', name: 'Remote' } });
+    await setup.media.join('lost-answer-room');
+    const connection = FakeConnection.instances[0] as any;
+    const steps: string[] = [];
+    negotiated(connection, 'have-local-offer');
+    connection.connectionState = 'connecting';
+    connection.setLocalDescription = async (description: RTCSessionDescriptionInit) => { steps.push(description.type!); connection.signalingState = 'stable'; };
+    connection.restartIce = () => { steps.push('restart'); };
+    context.mock.timers.tick(12_000); context.mock.timers.tick(2000);
+    await flush();
+    assert.deepEqual(steps, ['rollback', 'restart']);
+    assert.deepEqual(setup.failures, []);
+  } finally { setup.restore(); context.mock.timers.reset(); }
+});
+
+test('rate-limited signals are retried while current and never dropped silently', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  const setup = environment();
+  try {
+    setup.media.setSettings({ noiseSuppression: false });
+    setup.peerList.push({ socketId: 'remote', user: { id: 'remote-user', name: 'Remote' } });
+    await setup.media.join('rate-room');
+    const connection = FakeConnection.instances[0] as any;
+    negotiated(connection);
+    connection.connectionState = 'connected';
+    let rejections = 1;
+    setup.control.signalAck = () => rejections-- > 0 ? { error: 'Voice signaling rate exceeded' } : { ok: true };
+    const candidate = (usernameFragment: string) => ({ candidate: { toJSON: () => ({ candidate: `candidate:${usernameFragment}`, sdpMid: '0', sdpMLineIndex: 0, usernameFragment }) } });
+    connection.onicecandidate(candidate('local1'));
+    assert.equal(setup.signals.length, 1);
+    context.mock.timers.tick(1000);
+    assert.equal(setup.signals.length, 2);
+    assert.equal(setup.signals[1].candidate.usernameFragment, 'local1');
+    // A candidate of a generation this side has since replaced is not worth resending.
+    rejections = 1;
+    connection.onicecandidate(candidate('replaced'));
+    context.mock.timers.tick(10_000);
+    assert.equal(setup.signals.filter(signal => signal.candidate?.usernameFragment === 'replaced').length, 1);
+  } finally { setup.restore(); context.mock.timers.reset(); }
+});
+
+test('a peer that never connected is replaced, not ICE-restarted, when both clients support it', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  const setup = environment();
+  try {
+    setup.media.setSettings({ noiseSuppression: false });
+    setup.peerList.push({ socketId: 'remote', user: { id: 'remote-user', name: 'Remote' }, signaling: 2 } as any);
+    await setup.media.join('reset-room');
+    const first = FakeConnection.instances[0] as any;
+    let restarts = 0;
+    first.restartIce = () => { restarts++; };
+    negotiated(first);
+    first.connectionState = 'connecting';
+    context.mock.timers.tick(12_000); context.mock.timers.tick(2000);
+    assert.deepEqual(setup.signals.map(signal => signal.reset), [true]);
+    assert.equal(setup.signals[0].target, 'remote');
+    assert.equal(restarts, 0);
+    assert.equal(first.closed, true);
+    assert.equal(FakeConnection.instances.length, 2);
+    assert.equal(setup.media.peers.length, 1);
+    // The replacement keeps counting toward the same bound.
+    const second = FakeConnection.instances[1] as any;
+    second.restartIce = () => { restarts++; };
+    negotiated(second);
+    second.connectionState = 'connected'; second.onconnectionstatechange();
+    second.connectionState = 'failed'; second.onconnectionstatechange();
+    context.mock.timers.tick(4000);
+    assert.equal(restarts, 1);
+  } finally { setup.restore(); context.mock.timers.reset(); }
+});
+
+test('the polite side of a never-connected pair waits for the reset instead of restarting ICE', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  const setup = environment();
+  try {
+    setup.media.setSettings({ noiseSuppression: false });
+    // 'local' > 'aaa': this side is polite.
+    setup.peerList.push({ socketId: 'aaa', user: { id: 'remote-user', name: 'Remote' }, signaling: 2 } as any);
+    await setup.media.join('polite-room');
+    const connection = FakeConnection.instances[0] as any;
+    let restarts = 0;
+    connection.restartIce = () => { restarts++; };
+    negotiated(connection);
+    connection.connectionState = 'connecting';
+    for (let second = 0; second < 60; second++) context.mock.timers.tick(1000);
+    assert.equal(restarts, 0);
+    assert.deepEqual(setup.signals, []);
+    assert.equal(FakeConnection.instances.length, 1);
+    // Still bounded: if the reset never comes, the failure is reported.
+    for (let second = 0; second < 240; second++) context.mock.timers.tick(1000);
+    assert.equal(setup.failures.length, 1);
+  } finally { setup.restore(); context.mock.timers.reset(); }
 });

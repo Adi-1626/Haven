@@ -9,5 +9,5 @@ export interface Message { id: string; channelId: string | null; conversationId:
 export interface Conversation { id: string; name: string; memberIds: string[]; createdAt: number }
 export interface FriendRequest { id: string; fromId: string; toId: string; createdAt: number }
 export interface Sound { id: string; serverId: string; name: string; url: string; uploaderId: string }
-export interface VoicePeer { socketId: string; user: User; channelId: string; muted: boolean; deafened: boolean; sharing: boolean; speaking?: boolean; serverMuted?: boolean; serverDeafened?: boolean; streamProtocol?: number; broadcastId?: string }
+export interface VoicePeer { socketId: string; user: User; channelId: string; muted: boolean; deafened: boolean; sharing: boolean; speaking?: boolean; serverMuted?: boolean; serverDeafened?: boolean; streamProtocol?: number; broadcastId?: string; signaling?: number }
 export interface Bootstrap { user: User; users: User[]; servers: Server[]; channels: Channel[]; conversations: Conversation[]; friends: string[]; requests: FriendRequest[]; blocked: string[]; voice: VoicePeer[]; serverEmojis: ServerEmoji[] }

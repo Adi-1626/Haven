@@ -276,3 +276,81 @@ test('isolated Electron clients render both sharing directions and restore foreg
     }
   } finally { await app.close(); cleanup(profile); }
 });
+
+test('Electron soundboard, entry sound and join/leave cues play once in both clients under the default autoplay policy', async () => {
+  test.setTimeout(150_000);
+  const profile = mkdtempSync(path.join(tmpdir(), 'haven-media-sounds-'));
+  // No autoplay override: Electron's own default policy, as installed clients run it.
+  const env: Record<string, string | undefined> = { ...process.env, HAVEN_PROFILE_DIR: profile, HAVEN_MODE: 'local' };
+  for (const key of Object.keys(env)) if (/SUPABASE|DATABASE_URL|HAVEN_SERVER|HAVEN_ENV_FILE|ELECTRON_RUN_AS_NODE/.test(key)) delete env[key];
+  const app = await electron.launch({ args: [path.resolve('.'), '--use-fake-device-for-media-stream'], env: env as Record<string, string> });
+  try {
+    const main = await app.firstWindow();
+    await register(main, 'soundhost');
+    const opened = app.waitForEvent('window');
+    await main.evaluate(() => window.haven!.openTestClient());
+    const extra = await opened;
+    await register(extra, 'soundguest');
+    await main.getByRole('button', { name: 'Create a server', exact: true }).first().click();
+    await main.getByLabel('SERVER NAME').fill('Sound lab');
+    await main.getByRole('button', { name: 'Create server', exact: true }).click();
+    const boot = await (await main.request.get(new URL('/api/bootstrap', main.url()).href)).json();
+    const serverId = boot.servers[0].id;
+    const invite = await (await main.request.post(new URL(`/api/servers/${serverId}/invites`, main.url()).href)).json();
+    const wav = Buffer.alloc(44 + 16000);
+    wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(16000, 24); wav.writeUInt32LE(32000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(16000, 40);
+    for (let sample = 0; sample < 8000; sample++) wav.writeInt16LE(Math.round(Math.sin(sample * 2 * Math.PI * 440 / 16000) * 12000), 44 + sample * 2);
+    const sound = (await (await main.request.post(new URL(`/api/servers/${serverId}/sounds`, main.url()).href, { multipart: { name: 'Lab tone', file: { name: 'tone.wav', mimeType: 'audio/wav', buffer: wav } } })).json()).sound;
+    expect(await extra.evaluate(async code => (await fetch(`/api/invites/${code}/join`, { method: 'POST' })).status, invite.code)).toBe(200);
+    // The guest announces itself with an entry sound instead of the join cue.
+    expect(await extra.evaluate(async ({ serverId, soundId }) => (await fetch('/api/users/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings: { entrySounds: { [serverId]: soundId } } }) })).status, { serverId, soundId: sound.id })).toBe(200);
+    await extra.reload();
+    for (const page of [main, extra]) await page.evaluate(() => {
+      const qa = (window as any).qaSounds = { sounds: [] as string[], cues: [] as string[] };
+      const startSound = AudioBufferSourceNode.prototype.start;
+      AudioBufferSourceNode.prototype.start = function (this: AudioBufferSourceNode, ...args: any[]) { qa.sounds.push(this.context.state); return (startSound as any).apply(this, args); } as any;
+      const schedule = AudioParam.prototype.setValueAtTime;
+      AudioParam.prototype.setValueAtTime = function (this: any, value: number, time: number) { (this.__values ??= []).push(value); return schedule.call(this, value, time); };
+      const startTone = OscillatorNode.prototype.start;
+      OscillatorNode.prototype.start = function (this: any, ...args: any[]) {
+        const [first, second] = this.frequency.__values ?? [];
+        if (first === 659.25 && second === 880) qa.cues.push(`join:${this.context.state}`);
+        if (first === 880 && second === 587.33) qa.cues.push(`leave:${this.context.state}`);
+        return (startTone as any).apply(this, args);
+      } as any;
+    });
+    const sounds = (page: Page) => page.evaluate(() => (window as any).qaSounds.sounds as string[]);
+    const cues = (page: Page) => page.evaluate(() => (window as any).qaSounds.cues as string[]);
+    await foreground(app, main);
+    await main.getByRole('button', { name: 'Lounge', exact: true }).click();
+    await expect(main.locator('.voice-connected')).toBeVisible();
+    await expect.poll(() => cues(main)).toEqual(['join:running']);
+    await foreground(app, extra);
+    await extra.getByRole('button', { name: 'Sound lab', exact: true }).click();
+    await extra.getByRole('button', { name: 'Lounge', exact: true }).click();
+    await expect(extra.locator('.voice-connected')).toBeVisible();
+    await expect.poll(() => sounds(main)).toEqual(['running']);
+    await expect.poll(() => sounds(extra)).toEqual(['running']);
+    await extra.waitForTimeout(800);
+    expect(await cues(main)).toEqual(['join:running']);
+    expect(await cues(extra)).toEqual([]);
+    // Soundboard from the real UI reaches both clients exactly once.
+    await foreground(app, main);
+    await main.locator('.voice-connected').getByRole('button', { name: 'Soundboard', exact: true }).click();
+    await main.getByRole('button', { name: 'Lab tone', exact: true }).click();
+    await expect.poll(() => sounds(main)).toEqual(['running', 'running']);
+    await expect.poll(() => sounds(extra)).toEqual(['running', 'running']);
+    await main.getByRole('button', { name: 'Close soundboard dialog', exact: true }).click();
+    // A deliberate leave plays one leave cue on both sides.
+    await foreground(app, extra);
+    await extra.getByRole('button', { name: 'Disconnect voice', exact: true }).click();
+    await expect.poll(() => cues(main)).toEqual(['join:running', 'leave:running']);
+    await expect.poll(() => cues(extra)).toEqual(['leave:running']);
+    await main.waitForTimeout(800);
+    expect(await sounds(main)).toEqual(['running', 'running']);
+    await foreground(app, main);
+    await main.getByRole('button', { name: 'Disconnect voice', exact: true }).click();
+    await expect.poll(() => cues(main)).toEqual(['join:running', 'leave:running', 'leave:running']);
+  } finally { await app.close(); cleanup(profile); }
+});

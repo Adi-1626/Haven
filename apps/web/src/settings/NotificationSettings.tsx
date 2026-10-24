@@ -69,6 +69,17 @@ export function NotificationSettings({
               />
             }
           />
+          <SettingRow
+            label="Voice join and leave sounds"
+            description="Play a short chime when people join or leave your voice channel. Reconnections stay silent; deafening silences them."
+            control={
+              <ToggleSwitch
+                aria-label="Voice join and leave sounds"
+                checked={preferences.voiceCues}
+                onChange={event => onPreferences({ voiceCues: event.target.checked })}
+              />
+            }
+          />
         </div>
       </SettingsSection>
 

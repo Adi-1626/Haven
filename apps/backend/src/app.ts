@@ -40,6 +40,10 @@ export interface AppOptions {
   publicUrl?: string;
   serveStatic?: boolean;
   staticDir?: string;
+  /** Socket.IO heartbeat. Bounds how long a peer that vanished without closing its connection stays in voice. */
+  heartbeat?: { interval: number; timeout: number };
+  /** Overrides the configured file storage (tests use it to model signed Storage redirects). */
+  storage?: StorageService;
 }
 
 export function createApp({
@@ -54,6 +58,8 @@ export function createApp({
   publicUrl = process.env.PUBLIC_URL,
   serveStatic = process.env.SERVE_STATIC === 'true',
   staticDir = process.env.STATIC_DIR,
+  heartbeat = { interval: 10_000, timeout: 10_000 },
+  storage: optionsStorage,
 }: AppOptions = {}) {
   let configuredPublicUrl: string | undefined;
   if (publicUrl) {
@@ -66,7 +72,7 @@ export function createApp({
 
   const uploadDir = path.join(dataDir, 'uploads');
   const db: DatabaseAdapter = optionsDb || createDatabase({ dataDir, databaseUrl });
-  const storage: StorageService = createStorage({ uploadDir, supabaseUrl, supabaseServiceKey });
+  const storage: StorageService = optionsStorage ?? createStorage({ uploadDir, supabaseUrl, supabaseServiceKey });
   const supabaseVerifier = optionsSupabaseVerifier !== undefined
     ? optionsSupabaseVerifier
     : (supabaseUrl && (supabaseServiceKey || supabaseAnonKey))
@@ -87,6 +93,9 @@ export function createApp({
 
   const io = new SocketServer(httpServer, {
     maxHttpBufferSize: 256_000,
+    // Socket.IO's 25 s + 20 s default kept an abruptly disconnected participant visible for up to 45 s.
+    pingInterval: heartbeat.interval,
+    pingTimeout: heartbeat.timeout,
     cors: {
       origin: (origin, callback) => callback(null, originAllowed(origin, undefined)),
       credentials: true,
@@ -103,6 +112,27 @@ export function createApp({
     if (!bucket || bucket.until <= now()) { limits.set(key, { count: 1, until: now() + window }); return; }
     if (++bucket.count > maximum) throw new ApiError(429, 'Too many requests. Try again shortly.');
   };
+  // ICE trickles candidates in bursts (every network interface of every ICE generation, for each
+  // peer), then goes quiet. Token buckets admit those bursts and still cap sustained relay traffic.
+  const signalBuckets = new Map<string, { tokens: number; at: number }>();
+  const spend = (key: string, capacity: number, perSecond: number) => {
+    const bucket = signalBuckets.get(key) ?? { tokens: capacity, at: now() };
+    bucket.tokens = Math.min(capacity, bucket.tokens + (now() - bucket.at) * perSecond / 1000);
+    bucket.at = now();
+    signalBuckets.set(key, bucket);
+    if (bucket.tokens < 1) return false;
+    bucket.tokens--;
+    return true;
+  };
+  const signalRate = (socketId: string, target: string, description: boolean) => {
+    const pair = `${socketId}>${target}`;
+    if (!spend(`signal:${socketId}`, 600, 8) || !spend(`signal:${pair}`, 150, 2) || (description && !spend(`signal-sdp:${pair}`, 30, 0.5))) {
+      throw new ApiError(429, 'Voice signaling rate exceeded');
+    }
+  };
+  // Private per-connection voice session keys. A reconnecting client presents its key so the
+  // server can retire the stale socket it left behind. Never sent to other users.
+  const voiceSessions = new Map<string, string>();
 
   // Access tokens explicitly logged out stay rejected until they would have expired anyway.
   const revokedAccessTokens = new Map<string, number>();
@@ -120,6 +150,8 @@ export function createApp({
 
   const maintenance = async () => {
     for (const [key, value] of limits) if (value.until < now()) limits.delete(key);
+    // Idle buckets have refilled completely; dropping them is equivalent to keeping them.
+    for (const [key, value] of signalBuckets) if (now() - value.at > 300_000) signalBuckets.delete(key);
     for (const [hash, expiresAt] of revokedAccessTokens) if (expiresAt <= now()) revokedAccessTokens.delete(hash);
     for (const [hash, value] of observedAccessTokens) if (value.expiresAt <= now()) observedAccessTokens.delete(hash);
     await db.deleteExpiredSessions(now()).catch(() => {});
@@ -297,7 +329,8 @@ export function createApp({
 
   // Synchronous half of leaving voice. voice:join uses it so that the capacity check, room switch
   // and insertion happen without an intervening await (no other socket's join can interleave).
-  const detachVoice = (socket: Socket) => {
+  // `reason` lets clients tell a deliberate leave from a dropped or replaced connection.
+  const detachVoice = (socket: Socket, reason: 'leave' | 'moved' | 'disconnect' | 'replaced' | 'removed') => {
     const current = voice.get(socket.id);
     if (!current) return undefined;
     for (const [viewerId, subscriptions] of streamSubscriptions) {
@@ -311,12 +344,13 @@ export function createApp({
     }
     socket.leave(`voice:${current.channelId}`);
     voice.delete(socket.id);
-    io.to(`voice:${current.channelId}`).emit('voice:peer-left', { socketId: socket.id });
+    voiceSessions.delete(socket.id);
+    io.to(`voice:${current.channelId}`).emit('voice:peer-left', { socketId: socket.id, reason });
     return current;
   };
 
-  const leaveVoice = async (socket: Socket) => {
-    const current = detachVoice(socket);
+  const leaveVoice = async (socket: Socket, reason: 'leave' | 'disconnect' | 'removed' = 'leave') => {
+    const current = detachVoice(socket, reason);
     if (!current) return;
     const ch = await db.getChannel(current.channelId);
     if (ch) await syncServer(ch.serverId);
@@ -331,7 +365,7 @@ export function createApp({
           const ch = await db.getChannel(current.channelId);
           if (ch?.serverId === serverId) {
             socket.emit('voice:disconnect', { reason });
-            await leaveVoice(socket);
+            await leaveVoice(socket, 'removed');
             disconnectedCount++;
           }
         }
@@ -850,7 +884,7 @@ export function createApp({
     for (const socket of io.sockets.sockets.values()) {
       if (voice.get(socket.id)?.channelId === current.id) {
         socket.emit('voice:disconnect', { reason: 'channel-deleted' });
-        await leaveVoice(socket);
+        await leaveVoice(socket, 'removed');
       }
     }
     const { diskNames } = await db.deleteChannel(current.id);
@@ -1367,9 +1401,10 @@ export function createApp({
     socket.join(`user:${userId}`);
 
     let voiceControlQueue = Promise.resolve<unknown>(undefined);
-    const event = (name: string, handler: (payload: any) => Promise<unknown> | unknown) =>
+    let voiceSignalOrder = Promise.resolve<unknown>(undefined);
+    const event = (name: string, handler: (payload: any, turn: Promise<unknown>) => Promise<unknown> | unknown) =>
       socket.on(name, (payload = {}, ack?: (result: unknown) => void) => {
-        const run = async () => {
+        const run = async (turn: Promise<unknown> = Promise.resolve()) => {
         try {
           if (!socket.connected) throw new ApiError(401, 'Connection closed');
           if (closing) throw new ApiError(503, 'Server is restarting');
@@ -1378,9 +1413,11 @@ export function createApp({
             if (!valid) throw new SessionEnded();
           }
           if (socket.data.supabaseToken && !supabaseSocketCurrent(socket)) throw new SessionEnded();
+          // voice:signal has its own burst-tolerant budget; sharing this one let chat, typing and
+          // voice controls starve signaling, and a dropped candidate fails silently.
           if (name === 'voice:activity') rate(`voice-activity:${socket.id}`, 240);
-          else rate(`socket:${userId}`, 300);
-          const result = await handler(payload);
+          else if (name !== 'voice:signal') rate(`socket:${userId}`, 300);
+          const result = await handler(payload, turn);
           if (typeof ack === 'function') ack(result ?? { ok: true });
         } catch (error) {
           if (typeof ack === 'function') ack({ error: error instanceof Error ? error.message : 'Request failed' });
@@ -1388,8 +1425,15 @@ export function createApp({
         }
         };
         if (['voice:join', 'voice:leave', 'voice:state', 'voice:stream-watch', 'voice:stream-unwatch'].includes(name)) {
-          voiceControlQueue = voiceControlQueue.catch(() => {}).then(run);
+          voiceControlQueue = voiceControlQueue.catch(() => {}).then(() => run());
           track(voiceControlQueue);
+        } else if (name === 'voice:signal') {
+          // Authorize signals concurrently but forward them in packet order. A candidate that
+          // overtakes the offer of its ICE generation is rejected by the peer as an unknown ufrag.
+          const turn = voiceSignalOrder;
+          const work = run(turn);
+          voiceSignalOrder = turn.then(() => work);
+          track(work);
         } else track(run());
       });
 
@@ -1422,19 +1466,46 @@ export function createApp({
     });
 
     event('voice:join', async payload => {
-      const body = z.object({ channelId: z.string(), streamProtocol: z.literal(1).optional() }).parse(payload);
+      const body = z.object({
+        channelId: z.string(), streamProtocol: z.literal(1).optional(),
+        // `session` is the client's private key for this voice session; `resume` marks a reconnection
+        // rather than a deliberate join; `entrySound` asks the server to play the user's chosen entry
+        // sound, once and for deliberate joins only (older clients play it themselves).
+        session: z.string().min(16).max(64).optional(), resume: z.boolean().optional(), entrySound: z.boolean().optional(),
+        // 2: the client understands `reset` signals, which replace a peer connection pair.
+        signaling: z.literal(2).optional(),
+      }).parse(payload);
+      const capabilities = { streamSubscriptions: 1, voiceSessions: 1, entrySounds: 1 };
       const current = await channel(userId, body.channelId);
       if (current.type !== 'voice') throw new ApiError(400, 'Choose a voice channel');
       const flags = (await member(userId, current.serverId))!;
       const moderation = { serverId: current.serverId, muted: flags.serverMuted, deafened: flags.serverDeafened };
       const profile = await user(userId);
+      const entrySounds = body.entrySound && !body.resume ? (await user(userId, true)).settings?.entrySounds : undefined;
+      const entrySoundId = entrySounds && typeof entrySounds === 'object' ? (entrySounds as Record<string, unknown>)[current.serverId] : undefined;
+      const requestedSound = typeof entrySoundId === 'string' ? await db.getSound(entrySoundId) : undefined;
+      let entrySound = requestedSound?.serverId === current.serverId ? requestedSound : undefined;
       // No await from here until the participant is inserted: other sockets' joins are serialized
       // only by the event loop, so the capacity check and insertion must be one synchronous step.
       if (!socket.connected) throw new ApiError(401, 'Connection closed');
+      if (voice.get(socket.id)?.channelId === current.id) {
+        return { peers: [...voice.values()].filter(peer => peer.channelId === current.id && peer.socketId !== socket.id), moderation, capabilities };
+      }
+      // A connection that vanished without closing stays in voice until its heartbeat times out.
+      // When the same user's client reconnects with the same session key, retire it immediately:
+      // peers drop the ghost, and its slot does not count against the channel limit.
+      let replaced = false;
+      if (body.session) for (const [socketId, key] of voiceSessions) {
+        const stale = io.sockets.sockets.get(socketId);
+        if (key !== body.session || socketId === socket.id || !stale || stale.data.userId !== userId) continue;
+        detachVoice(stale, 'replaced');
+        stale.disconnect(true);
+        replaced = true;
+      }
       const peers = [...voice.values()].filter(peer => peer.channelId === current.id && peer.socketId !== socket.id);
-      if (voice.get(socket.id)?.channelId === current.id) return { peers, moderation, capabilities: { streamSubscriptions: 1 } };
       if (peers.length >= 8) throw new ApiError(409, 'Voice channel is full (8 participants)');
-      const previous = detachVoice(socket);
+      if (entrySound) { try { rate(`sound:${userId}`, 10); } catch { entrySound = undefined; } }
+      const previous = detachVoice(socket, 'moved');
       const participant: VoicePeer = {
         socketId: socket.id,
         user: profile,
@@ -1446,31 +1517,37 @@ export function createApp({
         sharing: false,
         speaking: false,
         streamProtocol: body.streamProtocol,
+        signaling: body.signaling,
       };
       voice.set(socket.id, participant);
+      if (body.session) voiceSessions.set(socket.id, body.session);
       socket.join(`voice:${current.id}`);
-      socket.to(`voice:${current.id}`).emit('voice:peer-joined', participant);
+      socket.to(`voice:${current.id}`).emit('voice:peer-joined', { ...participant, resumed: Boolean(body.resume) || replaced, entrySound: Boolean(entrySound) });
+      if (entrySound) io.to(`voice:${current.id}`).emit('sound:play', { sound: sound(entrySound), userId, entry: true });
       const previousChannel = previous && await db.getChannel(previous.channelId);
       if (previousChannel && previousChannel.serverId !== current.serverId) await syncServer(previousChannel.serverId);
       await syncServer(current.serverId);
-      return { peers, moderation, capabilities: { streamSubscriptions: 1 } };
+      return { peers, moderation, capabilities };
     });
 
     event('voice:leave', async () => { await leaveVoice(socket); });
 
-    event('voice:signal', async payload => {
+    event('voice:signal', async (payload, turn) => {
       const body = z.object({
         target: z.string(),
         description: z.object({ type: z.enum(['offer', 'answer', 'pranswer', 'rollback']), sdp: z.string().max(100_000).optional() }).optional(),
         candidate: z.object({ candidate: z.string().max(5000).optional(), sdpMid: z.string().nullable().optional(), sdpMLineIndex: z.number().nullable().optional(), usernameFragment: z.string().nullable().optional() }).nullable().optional(),
+        reset: z.literal(true).optional(),
       }).parse(payload);
+      signalRate(socket.id, body.target, Boolean(body.description || body.reset));
       const source = voice.get(socket.id);
       const target = voice.get(body.target);
       if (!source || !target || source.channelId !== target.channelId) throw new ApiError(403, 'Voice peer permission denied');
       await channel(userId, source.channelId);
       await channel(target.user.id, target.channelId);
+      await turn;
       if (voice.get(socket.id) !== source || voice.get(body.target) !== target || source.channelId !== target.channelId) throw new ApiError(403, 'Voice membership changed');
-      io.to(body.target).emit('voice:signal', { from: socket.id, description: body.description, candidate: body.candidate });
+      io.to(body.target).emit('voice:signal', { from: socket.id, description: body.description, candidate: body.candidate, ...(body.reset ? { reset: true } : {}) });
     });
 
     let streamControlQueue = Promise.resolve<unknown>(undefined);
@@ -1567,7 +1644,8 @@ export function createApp({
 
     socket.on('disconnect', () => track((async () => {
       await voiceControlQueue.catch(() => {});
-      await leaveVoice(socket);
+      await leaveVoice(socket, 'disconnect');
+      for (const key of signalBuckets.keys()) if (key.includes(socket.id)) signalBuckets.delete(key);
       if (!connected(userId)) {
         const audience = await db.getVisibleUsers(userId);
         emitUsers(audience, 'presence', { userId, status: 'offline' });

@@ -3,7 +3,7 @@ const path = require('node:path');
 const schemas = {
   'haven.media.settings': { inputDevice: 'string', outputDevice: 'string', inputDeviceLabel: 'string', outputDeviceLabel: 'string', pushToTalkKey: 'string', noiseSuppression: 'boolean', noiseSuppressionMode: 'string', echoCancellation: 'boolean', pushToTalk: 'boolean', gamingMode: 'boolean', inputVolume: 'number', outputVolume: 'number', soundboardVolume: 'number', soundboardMuted: 'boolean', inputSensitivity: 'number', voiceBitrateKbps: 'number', shareHeight: ['string', 'number'], shareFps: 'number', shareBitrateMbps: 'number' },
   'haven.voice.state': { muted: 'boolean', deafened: 'boolean' },
-  'haven.preferences': { animateEmoji: 'boolean', notifications: 'boolean' }
+  'haven.preferences': { animateEmoji: 'boolean', notifications: 'boolean', voiceCues: 'boolean' }
 };
 function validSetting(key, value) {
   if (!Object.hasOwn(schemas, key) || typeof value !== 'string' || value.length > 4096) return false;

@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: ['hosted.spec.ts', 'hosted-ui.spec.ts', 'dev-ui.spec.ts', 'dev-ui-auth.spec.ts', 'media-debug.spec.ts', 'stream-subscriptions.spec.ts', 'zenith-dialogs-and-voice.spec.ts'],
+  testIgnore: ['hosted.spec.ts', 'hosted-ui.spec.ts', 'dev-ui.spec.ts', 'dev-ui-auth.spec.ts', 'media-debug.spec.ts', 'stream-subscriptions.spec.ts', 'voice-signaling.spec.ts', 'voice-sounds.spec.ts', 'zenith-dialogs-and-voice.spec.ts'],
   timeout: 90_000,
   workers: 1,
   expect: { timeout: 12_000 },

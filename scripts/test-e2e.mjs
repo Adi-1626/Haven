@@ -9,7 +9,11 @@ const suites = requested.length ? [requested] : readdirSync(path.join(root, 'e2e
 for (const suite of suites) {
   const label = suite.join(' ');
   process.stdout.write(`\nHaven isolated E2E: ${label}\n`);
-  const configuration = suite.some(argument => argument.endsWith('stream-subscriptions.spec.ts'))
+  const configuration = suite.some(argument => argument.endsWith('voice-signaling.spec.ts'))
+    ? ['--config', 'e2e/voice-signaling.config.ts']
+    : suite.some(argument => argument.endsWith('voice-sounds.spec.ts'))
+    ? ['--config', 'e2e/voice-sounds.config.ts']
+    : suite.some(argument => argument.endsWith('stream-subscriptions.spec.ts'))
     ? ['--config', 'e2e/streams.config.ts']
     : suite.some(argument => /(?:zenith-dialogs-and-voice|dev-ui|dev-ui-auth)\.spec\.ts$/.test(argument))
       ? ['--config', 'e2e/dev-ui.config.ts'] : [];

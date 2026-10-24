@@ -15,6 +15,8 @@ import { createInputMonitor } from './input-monitor';
 import { createInputMeter } from './input-meter';
 import { createScreenTransport } from './screen-transport';
 import { soundboardService } from './soundboard-service';
+import { createCandidateRouter, iceUfrags } from './ice-candidates';
+import { readPreferences } from './preferences';
 import type { User } from '@haven/shared/types';
 export interface MediaUser {
   id: string;
@@ -81,7 +83,7 @@ interface PeerConnection {
   makingOffer: boolean;
   ignoreOffer: boolean;
   answering: boolean;
-  candidates: RTCIceCandidateInit[];
+  candidates: ReturnType<typeof createCandidateRouter>;
   screenSenders: RTCRtpSender[];
   screenTransport?: ReturnType<typeof createScreenTransport>;
   screenCapable: boolean;
@@ -94,13 +96,22 @@ interface PeerConnection {
   videoTracks: Map<string, MediaStreamTrack>;
   restartTimer?: ReturnType<typeof setTimeout>;
   restartAttempts: number;
+  /** Start of the current ICE checking phase (connection, local or remote ICE restart). */
+  checkingSince: number;
+  checkingTimer?: ReturnType<typeof setTimeout>;
+  remoteRestartAt: number;
+  everConnected: boolean;
+  /** The remote client can replace the connection pair on a `reset` signal. */
+  resettable: boolean;
   congested: boolean;
   congestion?: CongestionState;
 }
+interface PeerPresence { resumed?: boolean; entrySound?: boolean; signaling?: number }
 interface Signal {
   from: string;
   description?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
+  reset?: boolean;
 }
 const initialSettings: MediaSettings = {
   ...defaultRuntimePreferences,
@@ -109,6 +120,16 @@ const initialSettings: MediaSettings = {
   pushToTalkKey: 'Control+Shift+Space', gamingMode: false,
   soundboardVolume: 1, soundboardMuted: false,
 };
+/** ICE that has not connected by now is treated as failed: a lost candidate or description can leave it checking forever. */
+const iceCheckingLimit = 12_000;
+const maxIceRestarts = 5;
+/** A dropped connection that resumes within this window is a reconnection, not a leave. */
+const leaveCueGraceMs = 5000;
+function randomId() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  // randomUUID requires a secure context; getRandomValues does not.
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), value => value.toString(16).padStart(2, '0')).join('');
+}
 const initialQuality: ShareQuality = {
   nativeWidth: 0, nativeHeight: 0, width: 0, height: 0, fps: 60, bitrateMbps: 8,
   stats: { outbound: [], inbound: [] },
@@ -230,6 +251,10 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   const [moderation, setModeration] = useState(moderationRef.current);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const reconnectAttempts = useRef(0);
+  // Private key of this voice session, presented again on reconnection so the server retires the stale socket.
+  const voiceSession = useRef<string | null>(null);
+  const leaveCueTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const leaveCued = useRef(new Set<string>());
   const audioSamples = useRef(new Map<string, number>());
   const soundboardPreviousVolume = useRef(settings.soundboardVolume > 0 ? settings.soundboardVolume : 1);
   errorRef.current = reportError;
@@ -541,22 +566,112 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     }));
     try { await sender.setParameters(parameters); } catch {}
   }
+  function iceStuck(record: PeerConnection) {
+    const state = record.connection.connectionState;
+    if (state === 'failed' || state === 'disconnected') return true;
+    return (state === 'new' || state === 'connecting') && Date.now() - record.checkingSince >= iceCheckingLimit;
+  }
+  /** Re-evaluates the connection when its current checking phase reaches the limit. */
+  function superviseIce(record: PeerConnection) {
+    clearTimeout(record.checkingTimer);
+    record.checkingTimer = setTimeout(() => {
+      record.checkingTimer = undefined;
+      if (records.current.get(record.peer.socketId) === record && iceStuck(record)) scheduleIceRestart(record);
+    }, Math.max(0, record.checkingSince + iceCheckingLimit - Date.now()));
+  }
+  function iceCheckingStarted(record: PeerConnection) {
+    record.checkingSince = Date.now();
+    superviseIce(record);
+  }
   function scheduleIceRestart(record: PeerConnection) {
     if (record.restartTimer || record.peer.connectionError || !room.current || !voiceSocket.current?.connected) return;
+    // Both peers usually detect the failure together. The polite peer waits so it answers the
+    // impolite peer's restart offer instead of colliding with a second ICE generation.
+    const polite = (voiceSocket.current.id ?? '') > record.peer.socketId;
     record.restartTimer = setTimeout(() => {
       record.restartTimer = undefined;
       if (records.current.get(record.peer.socketId) !== record || !room.current || !voiceSocket.current?.connected) return;
-      if (!['failed', 'disconnected'].includes(record.connection.connectionState)) return;
-      if (record.restartAttempts >= 5) {
+      // Recovered, or still inside its checking window: look again when the window ends.
+      if (!iceStuck(record)) { superviseIce(record); return; }
+      // The remote peer started a new ICE generation recently. Let it finish instead of colliding.
+      if (Date.now() - record.remoteRestartAt < iceCheckingLimit) { superviseIce(record); return; }
+      if (record.restartAttempts >= maxIceRestarts) {
         record.peer.connectionError = 'Connection lost. Disconnect and rejoin voice to retry.';
         errorRef.current(`Could not restore the connection to ${record.peer.user.displayName ?? record.peer.user.name ?? 'a participant'}. Disconnect and rejoin voice to retry.`);
         refreshPeers();
         return;
       }
       record.restartAttempts++;
-      record.connection.restartIce();
+      // An ICE restart cannot revive a session that never connected when Firefox takes part: both
+      // ends report connected, but Firefox never transmits media. Replace the connection pair.
+      // Only the impolite side initiates, so the two peers never replace it at the same time; the
+      // polite side counts the attempt and waits, since its own restart would only delay the reset.
+      if (!record.everConnected && record.resettable) {
+        if (polite) superviseIce(record);
+        else resetPeer(record, true);
+        return;
+      }
+      iceCheckingStarted(record);
+      restartIce(record);
       scheduleIceRestart(record);
-    }, Math.min(30_000, 2000 * 2 ** record.restartAttempts));
+    }, Math.min(30_000, 2000 * 2 ** record.restartAttempts) + (polite ? 3000 : 0));
+  }
+  /** Replaces a peer's connection with a fresh one; the initiator offers, the other side answers. */
+  function resetPeer(record: PeerConnection, initiate: boolean) {
+    const { socketId, user, state: peerState } = record.peer;
+    if (initiate) sendSignal(record, { reset: true });
+    removePeer(socketId);
+    const next = createPeer(socketId, user, initiate, peerState.streamProtocol, record.resettable ? 2 : undefined);
+    next.peer.state = peerState;
+    next.restartAttempts = record.restartAttempts;
+    recoverStreamWatch(next);
+    refreshPeers();
+    return next;
+  }
+  function restartIce(record: PeerConnection) {
+    const connection = record.connection;
+    if (!connection.localDescription || !connection.remoteDescription) {
+      // Never negotiated: the first offer or its answer was lost. Offer from this side instead;
+      // restartIce() alone would not fire negotiationneeded again.
+      record.offerOnInitialNegotiation = true;
+      void negotiate(record);
+    } else if (connection.signalingState === 'have-local-offer' && !record.makingOffer) {
+      // The answer to our offer never arrived. Roll back so the restart can negotiate again.
+      record.signalQueue = record.signalQueue.then(async () => {
+        if (records.current.get(record.peer.socketId) !== record || connection.signalingState !== 'have-local-offer') return;
+        await connection.setLocalDescription({ type: 'rollback' });
+        connection.restartIce();
+      }).catch(error => { if (records.current.get(record.peer.socketId) === record) fail(error, 'Voice reconnection failed'); });
+    } else connection.restartIce();
+  }
+  /** Sends a signal and confirms delivery. A rejected signal used to vanish silently. */
+  function sendSignal(record: PeerConnection, signal: Pick<Signal, 'description' | 'candidate' | 'reset'>, attempt = 0) {
+    const socket = voiceSocket.current;
+    if (!socket) return;
+    socket.timeout(10_000).emit('voice:signal', { target: record.peer.socketId, ...signal }, (error: Error | null, result?: { error?: string }) => {
+      // A timeout means the transport dropped; reconnection rebuilds every peer connection.
+      if (error || !result?.error || records.current.get(record.peer.socketId) !== record || voiceSocket.current !== socket) return;
+      const ufrag = signal.candidate?.usernameFragment;
+      const current = signal.description ? record.connection.localDescription?.sdp === signal.description.sdp
+        : !ufrag || iceUfrags(record.connection.localDescription?.sdp).has(ufrag);
+      if (/rate|too many/i.test(result.error) && current && attempt < 3) {
+        setTimeout(() => { if (records.current.get(record.peer.socketId) === record) sendSignal(record, signal, attempt + 1); }, 1000 * 2 ** attempt);
+        return;
+      }
+      // Without this signal ICE may never leave checking; the watchdog restarts it when it is due.
+      superviseIce(record);
+    });
+  }
+  async function negotiate(record: PeerConnection) {
+    const connection = record.connection;
+    if (!record.offerOnInitialNegotiation && !connection.remoteDescription) return;
+    try {
+      record.makingOffer = true;
+      await connection.setLocalDescription(voiceDescription(await connection.createOffer(), settingsRef.current.gamingMode, settingsRef.current.voiceBitrateKbps));
+      sendSignal(record, { description: connection.localDescription?.toJSON() });
+    } catch (error) {
+      if (connection.signalingState !== 'closed') fail(error, 'Voice negotiation failed');
+    } finally { record.makingOffer = false; }
   }
   function screenDimensions(track: MediaStreamTrack) {
     const measured = screenSourceSize.current;
@@ -728,6 +843,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     activeWatchedStreams.current.delete(socketId);
     clearTimeout(record.watchTimer);
     clearTimeout(record.restartTimer);
+    clearTimeout(record.checkingTimer);
     record.screenTransport?.close();
     record.connection.onicecandidate = null;
     record.connection.onnegotiationneeded = null;
@@ -745,30 +861,21 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     audioSamples.current.forEach((_sample, key) => { if (key.startsWith(`${socketId}:`)) audioSamples.current.delete(key); });
     refreshPeers();
   }
-  function createPeer(socketId: string, user: MediaUser, offerOnInitialNegotiation = true, peerProtocol?: number) {
+  function createPeer(socketId: string, user: MediaUser, offerOnInitialNegotiation = true, peerProtocol?: number, signaling?: number) {
     const existing = records.current.get(socketId);
     if (existing) return existing;
     const connection = new RTCPeerConnection({ iceServers: iceServers.current });
     const record: PeerConnection = {
-      connection, audio: new Map(), screenAudioTracks: new Set(), screenCapable: streamProtocol.current && peerProtocol === 1, makingOffer: false, ignoreOffer: false, answering: false, candidates: [], screenSenders: [],
+      connection, audio: new Map(), screenAudioTracks: new Set(), screenCapable: streamProtocol.current && peerProtocol === 1, makingOffer: false, ignoreOffer: false, answering: false, candidates: createCandidateRouter(), screenSenders: [],
       offerOnInitialNegotiation, signalQueue: Promise.resolve(),
-      videoTracks: new Map(), restartAttempts: 0, congested: false,
+      videoTracks: new Map(), restartAttempts: 0, checkingSince: Date.now(), remoteRestartAt: -Infinity, everConnected: false, resettable: signaling === 2, congested: false,
       peer: { socketId, user, stream: null, state: { muted: false, deafened: false, sharing: false }, volume: localPreferences.current.get(user.id)?.volume ?? 1, localMuted: localPreferences.current.get(user.id)?.muted ?? false },
     };
     records.current.set(socketId, record);
     connection.onicecandidate = event => {
-      if (event.candidate) voiceSocket.current?.emit('voice:signal', { target: socketId, candidate: event.candidate.toJSON() });
+      if (event.candidate) sendSignal(record, { candidate: event.candidate.toJSON() });
     };
-    connection.onnegotiationneeded = async () => {
-      if (!record.offerOnInitialNegotiation && !connection.remoteDescription) return;
-      try {
-        record.makingOffer = true;
-        await connection.setLocalDescription(voiceDescription(await connection.createOffer(), settingsRef.current.gamingMode, settingsRef.current.voiceBitrateKbps));
-        voiceSocket.current?.emit('voice:signal', { target: socketId, description: connection.localDescription?.toJSON() });
-      } catch (error) {
-        if (connection.signalingState !== 'closed') fail(error, 'Voice negotiation failed');
-      } finally { record.makingOffer = false; }
-    };
+    connection.onnegotiationneeded = () => { void negotiate(record); };
     connection.ontrack = event => {
       adoptScreenLanes(record);
       const screenAudio = event.transceiver === record.screenTransport?.audio;
@@ -816,8 +923,11 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       record.peer.connectionState = connection.connectionState;
       refreshPeers();
       if (connection.connectionState === 'connected') {
+        record.everConnected = true;
         clearTimeout(record.restartTimer);
+        clearTimeout(record.checkingTimer);
         record.restartTimer = undefined;
+        record.checkingTimer = undefined;
         record.restartAttempts = 0;
         record.peer.connectionError = undefined;
         refreshPeers();
@@ -844,6 +954,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     const queued = pendingSignals.current.get(socketId) ?? [];
     pendingSignals.current.delete(socketId);
     queued.forEach(signal => { void receiveSignal(signal); });
+    superviseIce(record);
     refreshPeers();
     return record;
   }
@@ -853,10 +964,13 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     if (!record) {
       if (pendingSignals.current.size >= 16 && !pendingSignals.current.has(signal.from)) return;
       const queued = pendingSignals.current.get(signal.from) ?? [];
-      if (queued.length < 64) queued.push(signal);
+      // One ICE generation of a multi-homed host can exceed 64 candidates; the router bounds the rest.
+      if (queued.length < 256) queued.push(signal);
       pendingSignals.current.set(signal.from, queued);
       return;
     }
+    // Handled on arrival, not queued: every later signal from this peer belongs to the new connection.
+    if (signal.reset) { resetPeer(record, false); return; }
     record.signalQueue = record.signalQueue.then(() => processSignal(record, signal)).catch(error => {
       if (records.current.get(signal.from) === record) fail(error, 'Voice signaling failed');
     });
@@ -871,25 +985,43 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
         const collision = signal.description.type === 'offer' && !ready;
         const polite = (voiceSocket.current?.id ?? '') > signal.from;
         record.ignoreOffer = !polite && collision;
-        if (record.ignoreOffer) return;
+        if (record.ignoreOffer) { record.candidates.ignoredOffer(signal.description.sdp); return; }
         record.answering = signal.description.type === 'answer';
+        const previousUfrags = iceUfrags(connection.remoteDescription?.sdp);
         await connection.setRemoteDescription(signal.description);
         adoptScreenLanes(record);
         record.answering = false;
-        for (const candidate of record.candidates.splice(0)) await connection.addIceCandidate(candidate);
+        const unlocked = record.candidates.applied(signal.description.sdp);
+        if (Array.from(iceUfrags(signal.description.sdp)).some(ufrag => !previousUfrags.has(ufrag))) {
+          // A new remote ICE generation starts a new checking phase.
+          if (signal.description.type === 'offer' && previousUfrags.size) record.remoteRestartAt = Date.now();
+          iceCheckingStarted(record);
+        }
         if (signal.description.type === 'offer') {
           await connection.setLocalDescription(voiceDescription(await connection.createAnswer(), settingsRef.current.gamingMode, settingsRef.current.voiceBitrateKbps));
           record.offerOnInitialNegotiation = true;
-          voiceSocket.current?.emit('voice:signal', { target: signal.from, description: connection.localDescription?.toJSON() });
+          sendSignal(record, { description: connection.localDescription?.toJSON() });
         }
-      } else if (signal.candidate && !record.ignoreOffer) {
-        if (connection.remoteDescription) await connection.addIceCandidate(signal.candidate);
-        else record.candidates.push(signal.candidate);
+        // After answering: a rejected early candidate must not withhold the answer itself.
+        await addCandidates(connection, unlocked);
+      } else if (signal.candidate) {
+        // Candidates of the current generation stay valid while a colliding offer is ignored.
+        const candidate = record.candidates.receive(signal.candidate, record.ignoreOffer);
+        if (candidate) await connection.addIceCandidate(candidate);
       }
     } catch (error) {
       record.answering = false;
-      if (!record.ignoreOffer && connection.signalingState !== 'closed') fail(error, 'Voice connection failed');
+      if (connection.signalingState !== 'closed') fail(error, 'Voice connection failed');
     }
+  }
+  async function addCandidates(connection: RTCPeerConnection, candidates: RTCIceCandidateInit[]) {
+    // One rejected candidate must not discard the rest of its generation.
+    let failure: unknown;
+    for (const candidate of candidates) {
+      try { await connection.addIceCandidate(candidate); }
+      catch (error) { failure ??= error; }
+    }
+    if (failure !== undefined) throw failure;
   }
   function stopShare() {
     screenGeneration.current++;
@@ -909,8 +1041,22 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     updateQuality(qualityRef.current);
     emitState();
   }
+  function voiceCue(kind: 'join' | 'leave') {
+    if (!readPreferences().voiceCues || state.current.deafened || moderationRef.current.deafened) return;
+    void soundboardService.playCue(kind, { outputVolume: settingsRef.current.outputVolume, outputDeviceId: settingsRef.current.outputDevice });
+  }
+  function userInRoom(userId: string) {
+    return Array.from(records.current.values()).some(record => record.peer.user.id === userId);
+  }
+  function clearLeaveCues() {
+    leaveCueTimers.current.forEach(timer => clearTimeout(timer));
+    leaveCueTimers.current.clear();
+    leaveCued.current.clear();
+  }
   function leave() {
     roomServerId.current = null;
+    voiceSession.current = null;
+    clearLeaveCues();
     moderationRef.current = { muted: false, deafened: false };
     setModeration(moderationRef.current);
     clearTimeout(reconnectTimer.current);
@@ -956,6 +1102,8 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   async function join(channelId: string, recovering = false) {
     if (room.current === channelId) return;
     if (!recovering) leave();
+    if (!recovering || !voiceSession.current) voiceSession.current = randomId();
+    const session = voiceSession.current;
     const operation = generation.current;
     reconnectRoom.current = channelId;
     setVoiceChannelId(channelId);
@@ -971,8 +1119,10 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       if (!activeSocket?.connected) throw new Error('Chat connection went offline');
       room.current = channelId;
       setVoiceChannelId(channelId);
-      const responsePayload = await new Promise<{ capabilities?: { streamSubscriptions?: number }; peers?: ({ socketId: string; user: MediaUser } & Partial<VoiceState>)[]; moderation?: { serverId: string; muted: boolean; deafened: boolean }; error?: string }>((resolve, reject) => {
-        activeSocket.timeout(10_000).emit('voice:join', { channelId, streamProtocol: 1 }, (error: Error | null, result: { capabilities?: { streamSubscriptions?: number }; peers?: ({ socketId: string; user: MediaUser } & Partial<VoiceState>)[]; moderation?: { serverId: string; muted: boolean; deafened: boolean }; error?: string }) => {
+      type JoinResult = { capabilities?: { streamSubscriptions?: number; entrySounds?: number }; peers?: ({ socketId: string; user: MediaUser; signaling?: number } & Partial<VoiceState>)[]; moderation?: { serverId: string; muted: boolean; deafened: boolean }; error?: string };
+      const responsePayload = await new Promise<JoinResult>((resolve, reject) => {
+        // The server plays a deliberate join's entry sound itself, once, and never for a resumed session.
+        activeSocket.timeout(10_000).emit('voice:join', { channelId, streamProtocol: 1, signaling: 2, session, resume: recovering, entrySound: !recovering }, (error: Error | null, result: JoinResult) => {
           if (error) reject(new Error('Voice channel did not respond'));
           else resolve(result ?? {});
         });
@@ -988,7 +1138,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       applyModeration(responsePayload.moderation ?? { muted: false, deafened: false });
       responsePayload.peers?.forEach(peer => {
         if (peer.socketId === activeSocket.id) return;
-        const record = createPeer(peer.socketId, peer.user, false, peer.streamProtocol);
+        const record = createPeer(peer.socketId, peer.user, false, peer.streamProtocol, peer.signaling);
         record.peer.state = { muted: peer.muted ?? false, deafened: peer.deafened ?? false, sharing: peer.sharing ?? false, speaking: peer.speaking ?? false, serverMuted: peer.serverMuted, serverDeafened: peer.serverDeafened, streamProtocol: peer.streamProtocol, broadcastId: peer.broadcastId };
         recoverStreamWatch(record);
       });
@@ -999,11 +1149,12 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       reconnectRoom.current = null;
       reconnectAttempts.current = 0;
 
-      // Automatically play user's custom voice entry sound once on a genuine voice join
-      if (!recovering && roomServerId.current) {
-        const targetServerId = roomServerId.current;
-        const entrySoundId = soundboardService.getEntrySoundId(targetServerId, accountRef.current);
-        if (entrySoundId) activeSocket.emit('sound:play', { soundId: entrySoundId });
+      // A genuine join announces itself once: the entry sound when one is chosen, otherwise the join cue.
+      if (!recovering) {
+        const entrySoundId = roomServerId.current ? soundboardService.getEntrySoundId(roomServerId.current, accountRef.current) : null;
+        // Servers before entry-sound support expect the client to play it.
+        if (entrySoundId && responsePayload.capabilities?.entrySounds !== 1) activeSocket.emit('sound:play', { soundId: entrySoundId });
+        if (!entrySoundId) voiceCue('join');
       }
     } catch (error) {
       if (operation !== generation.current) return;
@@ -1194,22 +1345,43 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
 
   useEffect(() => {
     if (!socket) return;
-    const peerJoined = (payload: { socketId: string; user: MediaUser } & Partial<VoiceState>) => {
+    const peerJoined = (payload: { socketId: string; user: MediaUser } & Partial<VoiceState> & PeerPresence) => {
       if (room.current && payload.socketId !== socket.id) {
-        const record = createPeer(payload.socketId, payload.user, true, payload.streamProtocol);
+        const userId = payload.user.id;
+        const present = userInRoom(userId);
+        const grace = leaveCueTimers.current.get(userId);
+        clearTimeout(grace);
+        leaveCueTimers.current.delete(userId);
+        // A resumed session is silent unless its drop was already announced. A deliberate join
+        // is announced by its entry sound when the server plays one, otherwise by the join cue.
+        const announced = leaveCued.current.delete(userId);
+        if (!present && (payload.resumed ? announced : !payload.entrySound)) voiceCue('join');
+        const record = createPeer(payload.socketId, payload.user, true, payload.streamProtocol, payload.signaling);
         record.peer.state = { muted: payload.muted ?? false, deafened: payload.deafened ?? false, sharing: payload.sharing ?? false, speaking: payload.speaking ?? false, serverMuted: payload.serverMuted, serverDeafened: payload.serverDeafened, streamProtocol: payload.streamProtocol, broadcastId: payload.broadcastId };
         recoverStreamWatch(record);
         refreshPeers();
         emitState();
       }
     };
-    const peerLeft = (payload: { socketId: string }) => {
+    const peerLeft = (payload: { socketId: string; reason?: 'leave' | 'moved' | 'disconnect' | 'replaced' | 'removed' }) => {
       streamSubscribers.current.delete(payload.socketId);
       if (activeWatchedStreams.current.has(payload.socketId)) {
         activeWatchedStreams.current.delete(payload.socketId);
         setWatchingStreams(Array.from(activeWatchedStreams.current));
       }
+      const userId = records.current.get(payload.socketId)?.peer.user.id;
       removePeer(payload.socketId);
+      // A replaced socket was this user's own stale connection; the user never left.
+      if (!userId || !room.current || payload.reason === 'replaced' || userInRoom(userId)) return;
+      if (payload.reason !== 'disconnect') { voiceCue('leave'); return; }
+      // A dropped connection usually resumes within seconds. Announce it only if it stays gone.
+      clearTimeout(leaveCueTimers.current.get(userId));
+      leaveCueTimers.current.set(userId, setTimeout(() => {
+        leaveCueTimers.current.delete(userId);
+        if (!room.current || userInRoom(userId)) return;
+        leaveCued.current.add(userId);
+        voiceCue('leave');
+      }, leaveCueGraceMs));
     };
     const signal = (payload: Signal) => { void receiveSignal(payload); };
     const peerState = (payload: VoiceState & { socketId: string }) => {
@@ -1234,6 +1406,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     };
     const forcedDisconnect = (payload: { reason?: string }) => {
       leave();
+      voiceCue('leave');
       errorRef.current(payload.reason === 'channel-deleted' ? 'Voice disconnected because the channel was deleted.' : payload.reason === 'membership-revoked' ? 'Voice disconnected because access to the server was removed.' : 'Voice disconnected by the server.');
     };
     const moderated = (payload: { serverId: string; muted: boolean; deafened: boolean }) => {
@@ -1252,6 +1425,8 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       room.current = null;
       Array.from(records.current.keys()).forEach(removePeer);
       pendingSignals.current.clear();
+      // The room is rebuilt from the rejoin acknowledgement; pending announcements are stale.
+      clearLeaveCues();
       streamProtocol.current = false;
       streamSubscribers.current.clear();
       activeWatchedStreams.current.clear();
@@ -1543,7 +1718,13 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   }, [voiceChannelId, peers.length, sharing, hasRemoteVideo, settings.gamingMode, background, videoDetailsOpen, connectionStatsSources]);
 
   return {
-    join, leave, voiceChannelId,
+    join, voiceChannelId,
+    /** Disconnects deliberately, with the leave cue. */
+    leave: () => {
+      const active = Boolean(room.current || reconnectRoom.current);
+      leave();
+      if (active) voiceCue('leave');
+    },
     get peers() { return Array.from(records.current.values(), record => ({ ...record.peer })); },
     localStream, screenStream, muted: muted || moderation.muted || moderation.deafened, deafened: deafened || moderation.deafened, speaking, connectionStatus, moderation,
     toggleMute, toggleDeafen, sharing, startShare, stopShare,

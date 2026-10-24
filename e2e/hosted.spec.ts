@@ -52,6 +52,12 @@ test('token-only split-origin browser: files, icons, emoji, realtime chat, voice
   expect((await request.post(`${api}/api/servers/${server.id}/sounds`, { headers: owner.headers, multipart: { name: 'Hosted chime', file: { name: 'chime.wav', mimeType: 'audio/wav', buffer: wav } } })).status()).toBe(201);
   const seen: { url: string; authorization: string | undefined; status: number }[] = [];
   page.on('response', response => { if (response.url().startsWith(`${api}/api/`)) seen.push({ url: response.url(), authorization: response.request().headers()['authorization'], status: response.status() }); });
+  // Counts sounds that actually start on a running Web Audio context.
+  await page.addInitScript(() => {
+    const started = (window as unknown as { __soundStarts: string[] }).__soundStarts = [];
+    const start = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (this: AudioBufferSourceNode, ...args: Parameters<AudioBufferSourceNode['start']>) { started.push(this.context.state); return start.apply(this, args); };
+  });
   await page.goto('/');
   await page.getByRole('button', { name: 'Hosted community', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Welcome to #general', exact: true })).toBeVisible();
@@ -66,7 +72,9 @@ test('token-only split-origin browser: files, icons, emoji, realtime chat, voice
   await expect(page.getByText('Voice connected', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Room soundboard', exact: true }).click();
   await page.getByRole('button', { name: 'Hosted chime', exact: true }).click();
-  await expect.poll(() => seen.some(item => item.url.includes('/audio') && item.status === 200)).toBe(true);
+  // Files redirect to signed Storage URLs; the sound must still be fetched, decoded and played.
+  await expect.poll(() => seen.some(item => item.url.includes('/audio') && item.status === 302)).toBe(true);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __soundStarts: string[] }).__soundStarts)).toContain('running');
   await page.getByRole('button', { name: 'Close soundboard dialog', exact: true }).click();
   await page.getByRole('button', { name: 'general', exact: true }).click();
   // A second browser verifies that Socket.IO works without sharing a session cookie.
@@ -98,7 +106,9 @@ test('token-only split-origin browser: files, icons, emoji, realtime chat, voice
   for (const fragment of ['/rtc', '/icon', '/static', '/attachments/', '/audio']) {
     const requests = seen.filter(item => item.url.includes(fragment));
     expect(requests.length, fragment).toBeGreaterThan(0);
-    expect(requests.every(item => item.status === 200 && item.authorization === owner.headers.Authorization), fragment).toBe(true);
+    // Files answer with a redirect to signed Storage, as Supabase does; JSON endpoints answer directly.
+    const status = fragment === '/rtc' ? 200 : 302;
+    expect(requests.every(item => item.status === status && item.authorization === owner.headers.Authorization), fragment).toBe(true);
   }
   expect(errors).toEqual([]);
 });

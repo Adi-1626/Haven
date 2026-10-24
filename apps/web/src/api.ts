@@ -56,11 +56,12 @@ export async function fetchResource(url: string, init: RequestInit = {}): Promis
   const endpoint = resolveApiUrl(url);
   const headers = new Headers(init.headers);
   const privateResource = isApiResource(endpoint);
-  if (privateResource) {
-    const token = await getAccessToken();
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-  }
-  const response = await fetch(endpoint, { ...init, headers, credentials: privateResource ? 'include' : 'omit' });
+  const token = privateResource ? await getAccessToken() : null;
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  // Hosted files redirect to signed Storage URLs that answer `Access-Control-Allow-Origin: *`.
+  // A credentialed request cannot follow that redirect, so bearer-authenticated requests omit
+  // cookies (Hosted Mode never accepts them); only cookie-authenticated Local Mode includes them.
+  const response = await fetch(endpoint, { ...init, headers, credentials: privateResource && !token ? 'include' : 'omit' });
   if (!response.ok) {
     const result = await response.json().catch(() => ({}));
     throw new Error(result.error || `Request failed (${response.status})`);

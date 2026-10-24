@@ -4,11 +4,13 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { io as socketClient, type Socket } from 'socket.io-client';
-import { createApp, HAVEN_VERSION } from './app.js';
+import { createApp, HAVEN_VERSION, type AppOptions } from './app.js';
+import { SqliteAdapter } from './db/sqlite.js';
+import type { DatabaseAdapter } from './db/types.js';
 
-async function fixture() {
+async function fixture(database?: (directory: string) => DatabaseAdapter, options: Partial<AppOptions> = {}) {
   const directory = mkdtempSync(path.join(tmpdir(), 'haven-test-'));
-  let instance = createApp({ dataDir: directory });
+  let instance = createApp({ ...options, dataDir: directory, ...(database ? { db: database(directory) } : {}) });
   await new Promise<void>(resolve => instance.httpServer.listen(0, '127.0.0.1', resolve));
   const address = instance.httpServer.address() as { port: number };
   let base = `http://127.0.0.1:${address.port}`;
@@ -184,6 +186,186 @@ test('socket voice signaling and kick revocation stay inside authorized rooms', 
     assert.equal((await revoked).reason, 'membership-revoked');
     assert.ok((await emit(guestSocket, 'voice:state', { muted: false, deafened: false, sharing: true })).error);
     assert.ok((await emit(ownerSocket, 'voice:signal', { target: guestSocket.id, description: { type: 'offer', sdp: 'revoked' } })).error);
+  } finally { sockets.forEach(socket => socket.disconnect()); await context.close(); }
+});
+
+test('voice signals are forwarded in packet order when authorization latency varies', async () => {
+  // Hosted Postgres answers concurrent authorization queries in any order. An ICE-restart
+  // offer must still reach the peer before the candidates of its new ICE generation.
+  const delays: number[] = [];
+  const context = await fixture(directory => {
+    const adapter = new SqliteAdapter(path.join(directory, 'relay.sqlite'));
+    return new Proxy(adapter, {
+      get(target, key, receiver) {
+        const value = Reflect.get(target, key, receiver);
+        if (key !== 'getChannel' || typeof value !== 'function') return typeof value === 'function' ? value.bind(target) : value;
+        return async (...args: unknown[]) => {
+          const delay = delays.shift() ?? 0;
+          if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+          return value.apply(target, args);
+        };
+      },
+    });
+  });
+  const sockets: Socket[] = [];
+  try {
+    const owner = await context.register('order-owner'); const guest = await context.register('order-guest');
+    const community = await context.request('/servers', 'POST', { name: 'Ordered voice' }, owner.cookie); const serverId = community.data.server.id;
+    const invite = await context.request(`/servers/${serverId}/invites`, 'POST', {}, owner.cookie); await context.request(`/invites/${invite.data.code}/join`, 'POST', {}, guest.cookie);
+    const channelId = (await context.request('/bootstrap', 'GET', undefined, owner.cookie)).data.channels.find((channel: any) => channel.type === 'voice').id;
+    const ownerSocket = await connect(context.base, owner.cookie); const guestSocket = await connect(context.base, guest.cookie); sockets.push(ownerSocket, guestSocket);
+    await emit(ownerSocket, 'voice:join', { channelId }); await emit(guestSocket, 'voice:join', { channelId });
+    const received: string[] = [];
+    const complete = new Promise<void>(resolve => guestSocket.on('voice:signal', signal => {
+      received.push(signal.description ? signal.description.type : signal.candidate.candidate);
+      if (received.length === 4) resolve();
+    }));
+    // The offer's two authorization lookups are slow; every candidate's lookups are instant.
+    delays.push(80, 80);
+    const signals = [
+      emit(ownerSocket, 'voice:signal', { target: guestSocket.id, description: { type: 'offer', sdp: 'restart-offer' } }),
+      ...['first', 'second', 'third'].map(candidate => emit(ownerSocket, 'voice:signal', { target: guestSocket.id, candidate: { candidate, sdpMid: '0', sdpMLineIndex: 0, usernameFragment: 'next' } })),
+    ];
+    assert.ok((await Promise.all(signals)).every(result => !result.error));
+    await complete;
+    assert.deepEqual(received, ['offer', 'first', 'second', 'third']);
+    // A rejected signal releases its turn without stalling later traffic.
+    assert.ok((await emit(ownerSocket, 'voice:signal', { target: 'missing-peer', candidate: { candidate: 'lost' } })).error);
+    const after = new Promise<any>(resolve => guestSocket.once('voice:signal', resolve));
+    await emit(ownerSocket, 'voice:signal', { target: guestSocket.id, candidate: { candidate: 'after-error', usernameFragment: 'next' } });
+    assert.equal((await after).candidate.candidate, 'after-error');
+  } finally { sockets.forEach(socket => socket.disconnect()); await context.close(); }
+});
+
+async function voiceRoom(context: Awaited<ReturnType<typeof fixture>>, prefix: string, members = 2) {
+  const users = [];
+  for (let index = 0; index < members; index++) users.push(await context.register(`${prefix}-${index}`));
+  const community = await context.request('/servers', 'POST', { name: `${prefix} space` }, users[0].cookie); const serverId = community.data.server.id;
+  const invite = await context.request(`/servers/${serverId}/invites`, 'POST', {}, users[0].cookie);
+  for (const member of users.slice(1)) await context.request(`/invites/${invite.data.code}/join`, 'POST', {}, member.cookie);
+  const channelId = (await context.request('/bootstrap', 'GET', undefined, users[0].cookie)).data.channels.find((channel: any) => channel.type === 'voice').id;
+  return { users, serverId, channelId };
+}
+const next = (socket: Socket, name: string) => new Promise<any>(resolve => socket.once(name, resolve));
+const settle = (ms = 250) => new Promise(resolve => setTimeout(resolve, ms));
+
+test('voice signaling has its own burst budget: chat traffic cannot starve it, floods are capped and acknowledged', async () => {
+  const context = await fixture(); const sockets: Socket[] = [];
+  try {
+    const { users: [owner, guest], channelId } = await voiceRoom(context, 'signal-budget');
+    const ownerSocket = await connect(context.base, owner.cookie); const guestSocket = await connect(context.base, guest.cookie); sockets.push(ownerSocket, guestSocket);
+    await emit(ownerSocket, 'voice:join', { channelId }); await emit(guestSocket, 'voice:join', { channelId });
+    // Exhaust the shared per-user socket budget that signaling used to draw from.
+    const typing = await Promise.all(Array.from({ length: 310 }, () => emit(ownerSocket, 'typing', { channelId: 'missing' })));
+    assert.ok(typing.some(result => /too many/i.test(result.error ?? '')));
+    // Several ICE generations from a multi-homed host still arrive in full.
+    let arrived = 0;
+    guestSocket.on('voice:signal', () => { arrived++; });
+    const candidates = await Promise.all(Array.from({ length: 140 }, (_value, index) => emit(ownerSocket, 'voice:signal', { target: guestSocket.id, candidate: { candidate: `candidate:${index}`, sdpMid: '0', sdpMLineIndex: 0, usernameFragment: 'burst' } })));
+    assert.deepEqual(candidates.filter(result => result.error), []);
+    await settle();
+    assert.equal(arrived, 140);
+    // A flood far beyond any ICE burst is capped, and every rejection is acknowledged.
+    const flood = await Promise.all(Array.from({ length: 200 }, () => emit(ownerSocket, 'voice:signal', { target: guestSocket.id, candidate: { candidate: 'flood', usernameFragment: 'burst' } })));
+    const rejected = flood.filter(result => result.error);
+    assert.ok(rejected.length >= 150, `rejected ${rejected.length}`);
+    assert.ok(rejected.every(result => result.error === 'Voice signaling rate exceeded'));
+    // Descriptions carry large SDP and have a tighter budget of their own.
+    const offers = await Promise.all(Array.from({ length: 40 }, () => emit(guestSocket, 'voice:signal', { target: ownerSocket.id, description: { type: 'offer', sdp: 'v=0' } })));
+    assert.equal(offers.filter(result => !result.error).length, 30);
+  } finally { sockets.forEach(socket => socket.disconnect()); await context.close(); }
+});
+
+test('a reconnecting voice session replaces its stale socket at once; nobody else can evict it', async () => {
+  const context = await fixture(); const sockets: Socket[] = [];
+  try {
+    const { users: [owner, guest, other], channelId } = await voiceRoom(context, 'voice-session', 3);
+    const session = 'session-key-0123456789abcdef';
+    const stale = await connect(context.base, owner.cookie); const guestSocket = await connect(context.base, guest.cookie); sockets.push(stale, guestSocket);
+    await emit(stale, 'voice:join', { channelId, session }); await emit(guestSocket, 'voice:join', { channelId });
+    const staleId = stale.id;
+    const left = next(guestSocket, 'voice:peer-left'); const joined = next(guestSocket, 'voice:peer-joined'); const dropped = next(stale, 'disconnect');
+    const resumed = await connect(context.base, owner.cookie); sockets.push(resumed);
+    const result = await emit(resumed, 'voice:join', { channelId, session, resume: true });
+    assert.deepEqual(result.peers.map((peer: any) => peer.socketId), [guestSocket.id]);
+    assert.equal(result.capabilities.voiceSessions, 1);
+    assert.deepEqual(await left, { socketId: staleId, reason: 'replaced' });
+    const announced = await joined;
+    assert.equal(announced.socketId, resumed.id); assert.equal(announced.resumed, true); assert.equal(announced.entrySound, false);
+    assert.equal('session' in announced, false);
+    await dropped;
+    // Another account presenting the same key cannot retire this session.
+    const intruder = await connect(context.base, other.cookie); sockets.push(intruder);
+    await emit(intruder, 'voice:join', { channelId, session });
+    await settle();
+    assert.equal(resumed.connected, true);
+    const voice = (await context.request('/bootstrap', 'GET', undefined, guest.cookie)).data.voice.map((peer: any) => peer.socketId).sort();
+    assert.deepEqual(voice, [resumed.id, guestSocket.id, intruder.id].sort());
+  } finally { sockets.forEach(socket => socket.disconnect()); await context.close(); }
+});
+
+test('peers learn why someone left, and an abruptly lost connection leaves within the heartbeat bound', async () => {
+  const context = await fixture(undefined, { heartbeat: { interval: 200, timeout: 200 } }); const sockets: Socket[] = [];
+  try {
+    const { users: [owner, guest], channelId } = await voiceRoom(context, 'leave-reason');
+    const ownerSocket = await connect(context.base, owner.cookie); const guestSocket = await connect(context.base, guest.cookie); sockets.push(ownerSocket, guestSocket);
+    await emit(ownerSocket, 'voice:join', { channelId }); await emit(guestSocket, 'voice:join', { channelId });
+    let left = next(ownerSocket, 'voice:peer-left');
+    await emit(guestSocket, 'voice:leave');
+    assert.deepEqual(await left, { socketId: guestSocket.id, reason: 'leave' });
+    await emit(guestSocket, 'voice:join', { channelId });
+    // The network vanishes: nothing more is read or delivered, not even a close frame or FIN.
+    // Only the server heartbeat can notice.
+    const guestId = guestSocket.id;
+    left = next(ownerSocket, 'voice:peer-left');
+    const started = Date.now();
+    const tcp = (guestSocket.io.engine.transport as any).ws._socket;
+    tcp.pause(); tcp.write = () => true;
+    assert.deepEqual(await left, { socketId: guestId, reason: 'disconnect' });
+    assert.ok(Date.now() - started < 3000, `took ${Date.now() - started} ms`);
+    tcp.destroy();
+  } finally { sockets.forEach(socket => socket.disconnect()); await context.close(); }
+});
+
+test('the server plays a deliberate join entry sound once, never for a resumed session or a foreign sound', async () => {
+  const context = await fixture(); const sockets: Socket[] = [];
+  try {
+    const { users: [owner, guest], serverId, channelId } = await voiceRoom(context, 'entry-sound');
+    const upload = async (target: string) => {
+      const form = new FormData(); form.append('name', 'Entrance'); form.append('file', new Blob([new Uint8Array([82, 73, 70, 70])], { type: 'audio/wav' }), 'entrance.wav');
+      return (await (await fetch(`${context.base}/api/servers/${target}/sounds`, { method: 'POST', headers: { Cookie: owner.cookie }, body: form })).json() as any).sound;
+    };
+    const sound = await upload(serverId);
+    await context.request('/users/me', 'PATCH', { settings: { entrySounds: { [serverId]: sound.id } } }, owner.cookie);
+    const guestSocket = await connect(context.base, guest.cookie); sockets.push(guestSocket);
+    await emit(guestSocket, 'voice:join', { channelId });
+    const played: any[] = []; guestSocket.on('sound:play', value => played.push(value));
+    const joined = next(guestSocket, 'voice:peer-joined');
+    const ownerSocket = await connect(context.base, owner.cookie); sockets.push(ownerSocket);
+    const heardBySelf = next(ownerSocket, 'sound:play');
+    const result = await emit(ownerSocket, 'voice:join', { channelId, session: 'entry-session-0123456789', entrySound: true });
+    assert.equal(result.capabilities.entrySounds, 1);
+    const announced = await joined;
+    assert.equal(announced.entrySound, true); assert.equal(announced.resumed, false);
+    assert.equal(announced.user.settings, undefined);
+    assert.equal((await heardBySelf).sound.id, sound.id);
+    await settle();
+    assert.deepEqual(played.map(value => [value.sound.id, value.userId, value.entry]), [[sound.id, owner.id, true]]);
+    // A resumed session stays silent even when the flag is sent.
+    await emit(ownerSocket, 'voice:leave');
+    await emit(ownerSocket, 'voice:join', { channelId, session: 'entry-session-0123456789', resume: true, entrySound: true });
+    await settle();
+    assert.equal(played.length, 1);
+    // A sound of a different community is never played here.
+    const elsewhere = (await context.request('/servers', 'POST', { name: 'Elsewhere' }, owner.cookie)).data.server.id;
+    const foreign = await upload(elsewhere);
+    await context.request('/users/me', 'PATCH', { settings: { entrySounds: { [serverId]: foreign.id } } }, owner.cookie);
+    await emit(ownerSocket, 'voice:leave');
+    const rejoined = next(guestSocket, 'voice:peer-joined');
+    await emit(ownerSocket, 'voice:join', { channelId, session: 'entry-session-abcdef0123456', entrySound: true });
+    assert.equal((await rejoined).entrySound, false);
+    await settle();
+    assert.equal(played.length, 1);
   } finally { sockets.forEach(socket => socket.disconnect()); await context.close(); }
 });
 
