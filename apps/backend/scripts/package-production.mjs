@@ -23,6 +23,7 @@ async function main() {
 
   // Copy backend compiled output
   await cp(path.join(backendRoot, 'build'), path.join(outputDir, 'build'), { recursive: true });
+  await cp(path.join(backendRoot, 'certs'), path.join(outputDir, 'certs'), { recursive: true });
 
   // Copy shared compiled output and source
   await mkdir(path.join(outputDir, 'packages', 'shared'), { recursive: true });
@@ -60,10 +61,10 @@ RUN apk add --no-cache python3 make g++ sqlite
 COPY package.json ./
 COPY packages/ ./packages/
 COPY build/ ./build/
-COPY .env.example ./.env
+COPY certs/ ./certs/
 RUN npm install --omit=dev
 EXPOSE 3001
-ENV PORT=3001 HOST=0.0.0.0 NODE_ENV=production DATA_DIR=/data SERVE_STATIC=false
+ENV PORT=3001 HOST=0.0.0.0 NODE_ENV=production HAVEN_MODE=hosted DATA_DIR=/data SERVE_STATIC=false
 VOLUME ["/data"]
 CMD ["node", "build/index.js"]
 `;

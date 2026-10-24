@@ -1,0 +1,881 @@
+/* =========================================================================
+ * Zenith Minimal — Soundboard & Screen Share Quality Modals
+ * Stitch Screen ID: d35e0c0ced7949c7986673f49b41da0c
+ * ========================================================================= */
+
+@keyframes barPulse {
+  0%, 100% {
+    height: 4px;
+  }
+  50% {
+    height: 16px;
+  }
+}
+
+/* Modal Frame Resets for Soundboard & Share Quality */
+dialog.modal.zenith-soundboard-modal,
+dialog.modal.zenith-share-modal {
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  color-scheme: dark;
+}
+
+dialog.modal.zenith-soundboard-modal {
+  width: min(520px, calc(100vw - 32px)) !important;
+  max-width: 520px !important;
+}
+
+dialog.modal.zenith-share-modal {
+  width: min(500px, calc(100vw - 32px)) !important;
+  max-width: 500px !important;
+}
+
+.zenith-media-card {
+  background: #151821;
+  border: 1px solid #464554;
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  padding: 24px;
+  color: #e1e2eb;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  font-family: var(--font-sans, 'Inter', system-ui, sans-serif);
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  container-type: inline-size;
+}
+
+/* Modal Top Header */
+.zenith-media-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.zenith-media-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zenith-media-icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(192, 193, 255, 0.1);
+  border: 1px solid rgba(192, 193, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c0c1ff;
+  flex-shrink: 0;
+}
+
+.zenith-media-title {
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 18px;
+  font-weight: 700;
+  color: #e1e2eb;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.zenith-media-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #90909a;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.zenith-media-close-btn:hover {
+  background: rgba(43, 50, 64, 0.6);
+  color: #e1e2eb;
+}
+
+.zenith-media-subtitle {
+  font-size: 13px;
+  color: #90909a;
+  line-height: 1.5;
+  margin: 0 0 20px 0;
+}
+
+/* Soundboard Grid (2 Columns, strictly bounded, vertically scrollable) */
+.zenith-sound-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+  max-height: 280px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px 4px 2px 0;
+  overscroll-behavior: contain;
+}
+
+.zenith-sound-grid::-webkit-scrollbar {
+  width: 5px;
+}
+
+.zenith-sound-grid::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+}
+
+.zenith-sound-grid::-webkit-scrollbar-thumb {
+  background: #2b3240;
+  border-radius: 4px;
+}
+
+.zenith-sound-grid::-webkit-scrollbar-thumb:hover {
+  background: #464554;
+}
+
+@container (max-width: 450px) {
+  .zenith-sound-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.zenith-sound-pad {
+  background: #101319;
+  border: 1px solid #2b3240;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.zenith-sound-pad:hover:not(:disabled) {
+  border-color: rgba(192, 193, 255, 0.5);
+  background: #141822;
+}
+
+.zenith-sound-pad:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Soundpad Active / Playing State */
+.zenith-sound-pad.is-playing {
+  border: 2px solid #34d399;
+  box-shadow: 0 0 15px rgba(52, 211, 153, 0.2);
+}
+
+.zenith-sound-pad-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 0%;
+  overflow: hidden;
+}
+
+.zenith-sound-note-box {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: #191c22;
+  border: 1px solid #2b3240;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c0c1ff;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+  cursor: pointer;
+  padding: 0;
+}
+
+.zenith-sound-pad:hover:not(:disabled) .zenith-sound-note-box {
+  transform: scale(1.05);
+}
+
+.zenith-sound-pad.is-playing .zenith-sound-note-box {
+  background: rgba(6, 78, 59, 0.6);
+  border-color: rgba(52, 211, 153, 0.4);
+  color: #34d399;
+}
+
+.zenith-sound-pad-info {
+  min-width: 0;
+  flex: 1 1 0%;
+  overflow: hidden;
+}
+
+.zenith-sound-pad-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e1e2eb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-width: 100%;
+}
+
+.zenith-sound-pad-meta {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: #767680;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-width: 100%;
+}
+
+.zenith-sound-pad-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.zenith-sound-select-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #464554;
+  background: rgba(255, 255, 255, 0.05);
+  color: #e1e2eb;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.zenith-sound-select-btn:hover {
+  background: rgba(192, 193, 255, 0.15);
+  border-color: rgba(192, 193, 255, 0.4);
+  color: #fff;
+}
+
+.zenith-sound-select-btn.is-active {
+  border-color: rgba(192, 193, 255, 0.5);
+  background: rgba(192, 193, 255, 0.2);
+  color: #c0c1ff;
+}
+
+.zenith-sound-pad-playing-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.zenith-sound-playing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+}
+
+.zenith-sound-playing-label {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  font-weight: 600;
+  color: #34d399;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Waveform Pulse Animation */
+.zenith-waveform-container {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.zenith-wave-bar {
+  width: 3px;
+  background: #34d399;
+  border-radius: 9999px;
+  display: inline-block;
+  height: 4px;
+}
+
+.zenith-wave-bar:nth-child(1) {
+  animation: barPulse 0.8s ease-in-out infinite 0.1s;
+}
+
+.zenith-wave-bar:nth-child(2) {
+  animation: barPulse 0.8s ease-in-out infinite 0.25s;
+}
+
+.zenith-wave-bar:nth-child(3) {
+  animation: barPulse 0.8s ease-in-out infinite 0.4s;
+}
+
+.zenith-wave-bar:nth-child(4) {
+  animation: barPulse 0.8s ease-in-out infinite 0.15s;
+}
+
+.zenith-sound-delete-btn {
+  color: #767680;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  margin-left: 4px;
+}
+
+.zenith-sound-delete-btn:hover {
+  color: #ffb4ab;
+  background: rgba(255, 180, 171, 0.1);
+}
+
+.zenith-sound-pad .zenith-sound-delete-btn {
+  opacity: 0;
+}
+
+.zenith-sound-pad:hover .zenith-sound-delete-btn,
+.zenith-sound-pad.is-playing .zenith-sound-delete-btn {
+  opacity: 1;
+}
+
+/* Soundboard Upload Callout */
+.zenith-soundboard-upload-section {
+  padding-top: 16px;
+  border-top: 1px solid #2b3240;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.zenith-sound-upload-btn {
+  background: #1d2026;
+  border: 1px solid #464554;
+  color: #e1e2eb;
+  padding: 10px 16px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.zenith-sound-upload-btn:hover {
+  background: #272a30;
+  border-color: #5d5c6f;
+}
+
+.zenith-sound-upload-btn svg {
+  color: #c0c1ff;
+  transition: transform 0.15s ease;
+}
+
+.zenith-sound-upload-btn:hover svg {
+  transform: scale(1.1);
+}
+
+.zenith-sound-upload-footnote {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: #767680;
+  text-align: center;
+  margin-top: 10px;
+}
+
+/* Empty State */
+.zenith-sound-empty {
+  text-align: center;
+  color: #90909a;
+  font-size: 13px;
+  padding: 24px 0;
+  background: #101319;
+  border: 1px dashed #2b3240;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+/* =========================================================================
+ * Screen Share Quality Settings Modal
+ * ========================================================================= */
+
+.zenith-share-source-banner {
+  background: #101319;
+  border: 1px solid #2b3240;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.zenith-share-source-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e1e2eb;
+}
+
+.zenith-share-source-left svg {
+  color: #c0c1ff;
+}
+
+.zenith-share-live-tag {
+  background: rgba(6, 78, 59, 0.5);
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  color: #34d399;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zenith-share-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 6px #34d399;
+  animation: pulse 1.8s infinite;
+}
+
+.zenith-share-idle-tag {
+  background: rgba(43, 50, 64, 0.5);
+  border: 1px solid #2b3240;
+  color: #90909a;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.zenith-share-start-btn {
+  background: #1b1f2b;
+  border: 1px solid #3c4456;
+  color: #c0c1ff;
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.zenith-share-start-btn:hover:not(:disabled) {
+  background: #2b3240;
+  border-color: #c0c1ff;
+  color: #ffffff;
+}
+
+.zenith-share-start-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Controls Stack */
+.zenith-share-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.zenith-control-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.zenith-control-label {
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #c0c1ff;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.zenith-control-value-badge {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: #e1e2eb;
+  background: #101319;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #2b3240;
+}
+
+.zenith-select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.zenith-share-select {
+  width: 100%;
+  background: #101319;
+  border: 1px solid #2b3240;
+  border-radius: 6px;
+  padding: 9px 36px 9px 12px;
+  font-size: 13px;
+  color: #e1e2eb;
+  font-family: var(--font-sans, 'Inter', system-ui, sans-serif);
+  appearance: none;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.zenith-share-select:focus {
+  border-color: #c0c1ff;
+}
+
+.zenith-select-chevron {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+  color: #90909a;
+  display: flex;
+  align-items: center;
+}
+
+.zenith-control-help {
+  font-size: 12px;
+  color: #90909a;
+  line-height: 1.4;
+  margin: 6px 0 0 0;
+}
+
+/* Bitrate Range Slider */
+.zenith-slider-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin: 4px 0 6px;
+}
+
+.zenith-slider-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: #101319;
+  border: 1px solid #2b3240;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+}
+
+.zenith-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #c0c1ff;
+  border: 2px solid #1000a9;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(192, 193, 255, 0.4);
+  transition: transform 0.1s ease;
+}
+
+.zenith-slider-input::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.zenith-slider-input::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #c0c1ff;
+  border: 2px solid #1000a9;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(192, 193, 255, 0.4);
+}
+
+.zenith-slider-markers {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  color: #767680;
+  margin-top: 4px;
+  padding: 0 2px;
+}
+
+.zenith-share-footnote {
+  font-size: 12px;
+  color: #90909a;
+  line-height: 1.5;
+  margin: 6px 0 0 0;
+}
+
+.zenith-gaming-mode-banner {
+  background: rgba(238, 152, 0, 0.1);
+  border: 1px solid rgba(238, 152, 0, 0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: #ffb95f;
+  line-height: 1.4;
+  margin-bottom: 12px;
+}
+
+/* Modal Bottom Actions */
+.zenith-share-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid #2b3240;
+  margin-top: auto;
+}
+
+.zenith-stop-share-btn {
+  color: #ffb4ab;
+  background: transparent;
+  border: 1px solid rgba(255, 180, 171, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.zenith-stop-share-btn:hover {
+  background: rgba(255, 180, 171, 0.1);
+  border-color: rgba(255, 180, 171, 0.6);
+}
+
+.zenith-share-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zenith-share-cancel-btn {
+  color: #90909a;
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.15s ease;
+}
+
+.zenith-share-cancel-btn:hover {
+  color: #e1e2eb;
+}
+
+.zenith-share-apply-btn {
+  background: #c0c1ff;
+  color: #1000a9;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(192, 193, 255, 0.25);
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.zenith-share-apply-btn:hover:not(:disabled) {
+  background: #d0d1ff;
+}
+
+.zenith-share-apply-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.zenith-share-apply-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Soundpad Selected / Active Entry Sound State */
+.zenith-sound-pad.is-selected {
+  border-color: #c0c1ff;
+  box-shadow: 0 0 12px rgba(192, 193, 255, 0.2);
+  background: #171b26;
+}
+
+.zenith-sound-pad.is-selected .zenith-sound-note-box {
+  background: rgba(192, 193, 255, 0.15);
+  border-color: rgba(192, 193, 255, 0.4);
+  color: #c0c1ff;
+}
+
+/* Soundboard Modal Volume Control */
+.zenith-soundboard-volume-row {
+  margin: 16px 0 12px 0;
+  padding: 12px 14px;
+  background: #101319;
+  border: 1px solid #2b3240;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.zenith-soundboard-volume-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.zenith-soundboard-volume-title {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #90909a;
+  text-transform: uppercase;
+}
+
+.zenith-soundboard-volume-value {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 600;
+  color: #c0c1ff;
+}
+
+.zenith-soundboard-volume-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zenith-soundboard-mute-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  border-radius: 4px;
+  color: #90909a;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.zenith-soundboard-mute-btn:hover {
+  color: #e1e2eb;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.zenith-soundboard-mute-btn.is-muted {
+  color: #ffb4ab;
+}
+
+/* Responsive Adjustments: Narrow Viewports */
+@media (max-width: 560px) {
+  dialog.modal.zenith-soundboard-modal,
+  dialog.modal.zenith-share-modal {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+
+  .zenith-media-card {
+    padding: 16px;
+  }
+
+  .zenith-sound-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .zenith-share-footer {
+    flex-direction: column-reverse;
+    gap: 12px;
+  }
+
+  .zenith-stop-share-btn,
+  .zenith-share-actions-right {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .zenith-share-apply-btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+/* Responsive Adjustments: Short Viewports */
+@media (max-height: 640px) {
+  .zenith-media-card {
+    padding-top: 16px;
+    padding-bottom: 16px;
+    max-height: calc(100vh - 24px);
+  }
+
+  .zenith-sound-grid {
+    max-height: 200px;
+  }
+}

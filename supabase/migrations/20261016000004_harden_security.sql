@@ -1,11 +1,18 @@
 -- Haven Database and Storage Security Hardening Migration
+--
+-- Replay safety (21 Oct 2026): this file must apply cleanly after 20261016000003, which drops the
+-- five *_modify policies. Step 6 is therefore conditional. Databases that already recorded this
+-- version (production) are unaffected: the end state below matches the observed production catalog
+-- (no *_modify policies, service_role-only storage policies, haven_app with BYPASSRLS).
 
--- 1. Restricted backend runtime role
-DO $$ 
-BEGIN 
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'haven_app') THEN 
-    CREATE ROLE haven_app WITH LOGIN NOINHERIT; 
-  END IF; 
+-- 1. Backend runtime role. The backend is the row-authorization boundary (it connects as one role
+-- for all users), so like the production role it bypasses RLS; browser roles get no haven access.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'haven_app') THEN
+    CREATE ROLE haven_app WITH LOGIN NOINHERIT;
+  END IF;
+  ALTER ROLE haven_app BYPASSRLS;
 END $$;
 
 -- 2. Revoke all privileges on haven schema and its objects from anon and authenticated
@@ -41,9 +48,18 @@ ALTER POLICY "Haven authenticated storage select" ON storage.objects TO service_
 ALTER POLICY "Haven owner storage update" ON storage.objects TO service_role;
 ALTER POLICY "Haven owner storage delete" ON storage.objects TO service_role;
 
--- 6. Restrict redundant permissive modify policies to service_role
-ALTER POLICY channels_modify ON haven.channels TO service_role;
-ALTER POLICY invites_modify ON haven.invites TO service_role;
-ALTER POLICY conv_members_modify ON haven.conversation_members TO service_role;
-ALTER POLICY emojis_modify ON haven.server_emojis TO service_role;
-ALTER POLICY icons_modify ON haven.server_icons TO service_role;
+-- 6. Restrict redundant permissive modify policies to service_role, where they still exist
+-- (20261016000003 replaces them with per-command policies, so on a clean replay this is a no-op).
+DO $$
+DECLARE
+  v_policy record;
+BEGIN
+  FOR v_policy IN
+    SELECT p.policyname, p.tablename FROM pg_catalog.pg_policies p
+    WHERE p.schemaname = 'haven'
+      AND (p.tablename, p.policyname) IN (('channels', 'channels_modify'), ('invites', 'invites_modify'),
+        ('conversation_members', 'conv_members_modify'), ('server_emojis', 'emojis_modify'), ('server_icons', 'icons_modify'))
+  LOOP
+    EXECUTE pg_catalog.format('ALTER POLICY %I ON haven.%I TO service_role', v_policy.policyname, v_policy.tablename);
+  END LOOP;
+END $$;

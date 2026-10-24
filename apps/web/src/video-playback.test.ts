@@ -15,11 +15,11 @@ function fixture(withObserver = true) {
     observe() {}
     disconnect() { disconnected++; }
   }
-  const doc = Object.assign(new EventTarget(), { fullscreenElement: null as { contains(element: unknown): boolean } | null, defaultView: { IntersectionObserver: withObserver ? Observer : undefined } });
-  const element = {
+  const doc = Object.assign(new EventTarget(), { pictureInPictureElement: null as unknown, fullscreenElement: null as { contains(element: unknown): boolean } | null, defaultView: { IntersectionObserver: withObserver ? Observer : undefined } });
+  const element = Object.assign(new EventTarget(), {
     ownerDocument: doc, srcObject: null as MediaStream | null,
     pause() { pauses++; }, play() { plays++; return new Promise<void>(done => pending.push(done)); },
-  };
+  });
   const stream = { getTracks: () => [{ stop: () => trackStops++ }] } as unknown as MediaStream;
   const controller = createVideoPlayback(element as unknown as HTMLVideoElement, stream, true, value => playing.push(value));
   return {
@@ -84,5 +84,25 @@ test('browsers without IntersectionObserver retain foreground playback and clean
   view.resolvePlay(); await Promise.resolve();
   assert.equal(view.element.srcObject, null);
   assert.equal(view.playing.includes(true), false);
+  assert.equal(view.counts().trackStops, 0);
+});
+
+test('picture in picture retains its visual sink in the background, then releases it on exit or disposal', () => {
+  const view = fixture();
+  view.doc.pictureInPictureElement = view.element;
+  view.element.dispatchEvent(new Event('enterpictureinpicture'));
+  view.controller.setActive(false);
+  view.intersect(false);
+  assert.equal(view.element.srcObject, view.stream);
+  view.doc.pictureInPictureElement = null;
+  view.element.dispatchEvent(new Event('leavepictureinpicture'));
+  assert.equal(view.element.srcObject, null);
+  view.doc.pictureInPictureElement = view.element;
+  view.element.dispatchEvent(new Event('enterpictureinpicture'));
+  assert.equal(view.element.srcObject, view.stream);
+  view.controller.destroy();
+  assert.equal(view.element.srcObject, null);
+  view.element.dispatchEvent(new Event('enterpictureinpicture'));
+  assert.equal(view.element.srcObject, null);
   assert.equal(view.counts().trackStops, 0);
 });

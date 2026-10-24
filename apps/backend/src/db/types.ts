@@ -118,14 +118,43 @@ export interface ServerIconRow {
   diskName: string;
 }
 
+export interface MessageAttachmentRow { messageId: string; id: string; name: string; mime: string; size: number }
+export interface MessageReactionRow { messageId: string; emoji: string; userId: string }
+
+/** An attachment was already claimed, belongs to someone else or to another destination. Rolls back the message. */
+export class AttachmentClaimError extends Error {
+  status = 403 as const;
+  constructor() { super('Attachment permission denied'); }
+}
+
+/** Either direction of a friend request already exists (detected under the pair lock). */
+export class FriendRequestConflictError extends Error {
+  status = 409 as const;
+  constructor(public incoming: boolean) {
+    super(incoming ? 'This person already sent you a request. Accept it in Incoming requests.' : 'You already sent this person a friend request');
+  }
+}
+
 export interface DatabaseAdapter {
   isPostgres: boolean;
   close(): Promise<void>;
+  /** Cheap round trip used by startup and the readiness probe. */
+  checkConnection(): Promise<void>;
+  /**
+   * Hosted only: whether a Supabase Auth session (JWT `session_id`) still exists. `undefined` means the
+   * check is unavailable in this database (function not installed or not granted), never "revoked".
+   */
+  isAuthSessionActive?(sessionId: string, userId: string): Promise<boolean | undefined>;
 
   // Users
   getUser(userId: string): Promise<UserRow | undefined>;
   getUserByUsername(username: string): Promise<UserRow | undefined>;
-  createUser(user: { id: string; username: string; displayName: string; password?: string; createdAt: number }): Promise<void>;
+  /** Batch lookup; missing ids are omitted. Order is unspecified. */
+  getUsers(userIds: string[]): Promise<UserRow[]>;
+  createUser(user: { id: string; username: string; displayName: string; password?: string; settings?: string; createdAt: number }): Promise<void>;
+  /** Changes the username; resolves false when another account already uses it (case-insensitive). */
+  setUsername(userId: string, username: string): Promise<boolean>;
+  completeUserProfile(userId: string, username: string, displayName: string): Promise<'completed' | 'unavailable' | 'already-complete'>;
   updateUser(userId: string, patch: { displayName?: string; bio?: string; avatar?: string; status?: string; settings?: string }): Promise<void>;
   getVisibleUsers(userId: string): Promise<string[]>;
 
@@ -178,8 +207,13 @@ export interface DatabaseAdapter {
   removeConversationMember(conversationId: string, userId: string): Promise<void>;
 
   // Messages
-  getMessages(target: { channelId?: string; conversationId?: string }, before: number, query: string, limit: number): Promise<string[]>;
+  /** Newest first. `beforeId` breaks ties for messages sharing the `before` timestamp. */
+  getMessages(target: { channelId?: string; conversationId?: string }, before: number, query: string, limit: number, beforeId?: string): Promise<string[]>;
   getMessage(messageId: string): Promise<MessageRow | undefined>;
+  getMessagesByIds(messageIds: string[]): Promise<MessageRow[]>;
+  getAttachmentsForMessages(messageIds: string[]): Promise<MessageAttachmentRow[]>;
+  getReactionsForMessages(messageIds: string[]): Promise<MessageReactionRow[]>;
+  /** Claims every attachment atomically (unclaimed, same uploader and destination) or throws AttachmentClaimError. */
   createMessage(message: { id: string; channelId?: string | null; conversationId?: string | null; authorId: string; content: string; replyTo?: string | null; attachmentIds: string[] }): Promise<number>;
   updateMessage(messageId: string, content: string, editedAt: number): Promise<void>;
   deleteMessage(messageId: string): Promise<{ diskNames: string[] }>;
@@ -199,6 +233,7 @@ export interface DatabaseAdapter {
   getFriendRequests(userId: string): Promise<FriendRequestRow[]>;
   getFriendRequest(id: string): Promise<FriendRequestRow | undefined>;
   findPendingFriendRequest(user1: string, user2: string): Promise<FriendRequestRow | undefined>;
+  /** Throws FriendRequestConflictError when a request already exists in either direction. */
   createFriendRequest(id: string, fromId: string, toId: string, createdAt: number): Promise<void>;
   acceptFriendRequest(id: string, userId: string): Promise<{ fromId: string; toId: string }>;
   deleteFriendRequest(id: string, userId: string): Promise<{ fromId: string; toId: string } | undefined>;

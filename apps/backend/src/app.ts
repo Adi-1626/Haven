@@ -1,5 +1,5 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
-import { normalizeLoginUsername, usernameExpression } from '@haven/shared/auth';
+import { normalizeLoginUsername, usernameExpression, usernameProblem } from '@haven/shared/auth';
 import { createServer } from 'node:http';
 import { randomBytes, randomUUID, scrypt, timingSafeEqual, createHash } from 'node:crypto';
 import path from 'node:path';
@@ -9,12 +9,15 @@ import { Server as SocketServer, type Socket } from 'socket.io';
 import { z } from 'zod';
 import type { User, Message, VoicePeer, ServerEmoji } from '@haven/shared/types';
 import { inspectRaster } from './images.js';
-import { createDatabase, type DatabaseAdapter, SqliteAdapter } from './db/index.js';
+import { createDatabase, type DatabaseAdapter, type UserRow, SqliteAdapter, AttachmentClaimError, FriendRequestConflictError } from './db/index.js';
 import { createStorage, type StorageService } from './storage/index.js';
-import { SupabaseAuthVerifier } from './auth/supabase.js';
+import { HostedProfileReviewRequiredError, SupabaseAuthVerifier } from './auth/supabase.js';
+import { assertActiveInvite, InviteUnavailableError } from './db/invites.js';
 
-type AuthRequest = Request & { userId?: string };
+type AuthRequest = Request & { userId?: string; profile?: User; viaSupabase?: boolean };
 class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
+/** The socket's session ended: acknowledge with this error first, then disconnect, so the client learns why. */
+class SessionEnded extends ApiError { constructor() { super(401, 'Session expired'); } }
 const id = () => randomUUID();
 const now = () => Date.now();
 const text = (maximum: number) => z.string().trim().min(1).max(maximum);
@@ -67,6 +70,11 @@ export function createApp({
     : (supabaseUrl && (supabaseServiceKey || supabaseAnonKey))
       ? new SupabaseAuthVerifier(supabaseUrl, (supabaseServiceKey || supabaseAnonKey)!)
       : null;
+  // Hosted Mode trusts only verified Supabase identities. Local username/password accounts,
+  // relay_session cookies and local session bearer tokens are rejected everywhere.
+  const isHostedMode = Boolean(db.isPostgres && supabaseUrl && supabaseAnonKey);
+  // Durable, cross-instance logout: a signed-out JWT's session_id no longer exists in auth.sessions.
+  if (supabaseVerifier && db.isAuthSessionActive) supabaseVerifier.setSessionCheck((sessionId, userId) => db.isAuthSessionActive!(sessionId, userId));
 
   const app = express();
   if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
@@ -85,6 +93,8 @@ export function createApp({
   });
 
   const voice = new Map<string, VoicePeer>();
+  // Volatile subscriptions are scoped to sockets and a particular capture session.
+  const streamSubscriptions = new Map<string, Map<string, string>>();
   const limits = new Map<string, { count: number; until: number }>();
   const rate = (key: string, maximum = 120, window = 60_000) => {
     const bucket = limits.get(key);
@@ -92,53 +102,108 @@ export function createApp({
     if (++bucket.count > maximum) throw new ApiError(429, 'Too many requests. Try again shortly.');
   };
 
-  const cleanupTimer = setInterval(async () => {
+  // Access tokens explicitly logged out stay rejected until they would have expired anyway.
+  const revokedAccessTokens = new Map<string, number>();
+  const observedAccessTokens = new Map<string, { userId: string; sessionId?: string; expiresAt: number }>();
+  const observeToken = (token: string, userId: string) => observedAccessTokens.set(tokenHash(token), { userId, sessionId: SupabaseAuthVerifier.tokenSessionId(token), expiresAt: SupabaseAuthVerifier.tokenExpiresAt(token) ?? now() + 3600_000 });
+  const tokenRevoked = (hash: string | undefined) => Boolean(hash) && (revokedAccessTokens.get(hash!) ?? 0) > now();
+  // Socket.IO does not await async listeners. Track socket work so close() can drain it before the pool ends.
+  const pendingWork = new Set<Promise<unknown>>();
+  const track = (work: Promise<unknown>) => {
+    pendingWork.add(work);
+    work.catch(() => {}).finally(() => pendingWork.delete(work));
+  };
+  let closing = false;
+  const supabaseRecheckMs = 120_000;
+
+  const maintenance = async () => {
     for (const [key, value] of limits) if (value.until < now()) limits.delete(key);
+    for (const [hash, expiresAt] of revokedAccessTokens) if (expiresAt <= now()) revokedAccessTokens.delete(hash);
+    for (const [hash, value] of observedAccessTokens) if (value.expiresAt <= now()) observedAccessTokens.delete(hash);
     await db.deleteExpiredSessions(now()).catch(() => {});
     for (const socket of io.sockets.sockets.values()) {
+      if (closing) return;
       if (socket.data.sessionHash) {
-        const valid = await db.hasValidSession(socket.data.sessionHash, now()).catch(() => false);
+        // A database error is not proof that the session ended; only a definitive miss disconnects.
+        const valid = await db.hasValidSession(socket.data.sessionHash, now()).catch(() => true);
         if (!valid) socket.disconnect(true);
+      } else if (socket.data.supabaseToken && supabaseVerifier) {
+        if (!supabaseSocketCurrent(socket)) { socket.disconnect(true); continue; }
+        if (now() - socket.data.verifiedAt < supabaseRecheckMs) continue;
+        // Detects provider-side revocation (sign-out elsewhere, deleted/banned user). Outages keep the socket.
+        const result = await supabaseVerifier.verifyAccessTokenWithDetails(socket.data.supabaseToken);
+        if (result.user?.id === socket.data.userId) socket.data.verifiedAt = now();
+        else if (!result.unavailable) socket.disconnect(true);
       }
     }
+  };
+  let maintenanceRunning = false;
+  const cleanupTimer = setInterval(() => {
+    // Provider rechecks are sequential network calls; never let a slow pass overlap the next tick.
+    if (maintenanceRunning) return;
+    maintenanceRunning = true;
+    track(maintenance().finally(() => { maintenanceRunning = false; }));
   }, 60_000);
   cleanupTimer.unref();
 
+  const supabaseSocketCurrent = (socket: Socket) =>
+    !tokenRevoked(socket.data.supabaseTokenHash) && (socket.data.supabaseTokenExpiresAt ?? Infinity) > now();
+
   const connected = (userId: string) => [...io.sockets.sockets.values()].some(socket => socket.data.userId === userId);
+
+  const publicUser = (row: UserRow, privateFields = false, online = connected(row.id)): User => ({
+    id: row.id,
+    username: row.username,
+    displayName: row.displayName,
+    bio: row.bio,
+    avatar: row.avatar,
+    status: online ? row.status : 'offline',
+    createdAt: row.createdAt,
+    ...(privateFields ? { settings: JSON.parse(row.settings) } : {}),
+  });
 
   const user = async (userId: string, privateFields = false): Promise<User> => {
     const row = await db.getUser(userId);
     if (!row) throw new ApiError(404, 'User not found');
-    return {
-      id: row.id,
-      username: row.username,
-      displayName: row.displayName,
-      bio: row.bio,
-      avatar: row.avatar,
-      status: connected(userId) ? row.status : 'offline',
-      createdAt: row.createdAt,
-      ...(privateFields ? { settings: JSON.parse(row.settings) } : {}),
-    };
+    return publicUser(row, privateFields);
   };
 
-  const resolveUserId = async (cookie?: string, authHeader?: string): Promise<string | undefined> => {
+  /** Batch profile lookup preserving the requested order; unknown ids are skipped. */
+  const users = async (userIds: string[]): Promise<User[]> => {
+    const rows = new Map((await db.getUsers([...new Set(userIds)])).map(row => [row.id, row]));
+    const online = new Set([...io.sockets.sockets.values()].map(socket => socket.data.userId));
+    return userIds.flatMap(userId => rows.has(userId) ? [publicUser(rows.get(userId)!, false, online.has(userId))] : []);
+  };
+
+  const resolveUser = async (cookie?: string, authHeader?: string): Promise<{ userId: string; viaSupabase: boolean } | undefined> => {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.slice(7).trim();
-      if (supabaseVerifier) {
+      if (supabaseVerifier && !tokenRevoked(tokenHash(token))) {
         const verifiedResult = await supabaseVerifier.verifyAccessTokenWithDetails(token);
         if (verifiedResult.unconfirmedEmail) {
           throw new ApiError(403, 'Email address must be verified before signing in');
         }
         if (verifiedResult.user) {
+          observeToken(token, verifiedResult.user.id);
           await supabaseVerifier.ensureHavenUser(db, verifiedResult.user);
-          return verifiedResult.user.id;
+          if (tokenRevoked(tokenHash(token))) return undefined;
+          return { userId: verifiedResult.user.id, viaSupabase: true };
         }
+        if (verifiedResult.signedOut) {
+          revokedAccessTokens.set(tokenHash(token), SupabaseAuthVerifier.tokenExpiresAt(token) ?? now() + 3600_000);
+          return undefined;
+        }
+        // 503 lets clients retry instead of treating a provider outage as a sign-out.
+        if (verifiedResult.unavailable && isHostedMode) throw new ApiError(503, 'Sign-in is temporarily unavailable. Try again shortly.');
       }
+      if (isHostedMode) return undefined;
       const fromToken = await db.getSessionUserId(tokenHash(token), now());
-      if (fromToken) return fromToken;
+      if (fromToken) return { userId: fromToken, viaSupabase: false };
     }
+    if (isHostedMode) return undefined;
     const token = parseCookies(cookie).relay_session;
-    return token ? await db.getSessionUserId(tokenHash(token), now()) : undefined;
+    const fromCookie = token ? await db.getSessionUserId(tokenHash(token), now()) : undefined;
+    return fromCookie ? { userId: fromCookie, viaSupabase: false } : undefined;
   };
 
   const member = async (userId: string, serverId: string, moderate = false) => {
@@ -176,19 +241,32 @@ export function createApp({
     return `conversation:${value.conversationId}`;
   };
 
+  /** Loads messages with attachments and reactions in three queries total, preserving `messageIds` order. */
+  const messages = async (messageIds: string[]): Promise<Message[]> => {
+    if (!messageIds.length) return [];
+    const [rows, attachments, reactions] = await Promise.all([
+      db.getMessagesByIds(messageIds), db.getAttachmentsForMessages(messageIds), db.getReactionsForMessages(messageIds),
+    ]);
+    const found = new Map(rows.map(row => [row.id, row]));
+    return messageIds.flatMap(messageId => {
+      const row = found.get(messageId);
+      if (!row) return [];
+      const reactionsMap = new Map<string, string[]>();
+      for (const reaction of reactions) {
+        if (reaction.messageId === messageId) reactionsMap.set(reaction.emoji, [...(reactionsMap.get(reaction.emoji) ?? []), reaction.userId]);
+      }
+      return [{
+        ...row,
+        attachments: attachments.filter(item => item.messageId === messageId).map(({ messageId: _owner, ...item }) => ({ ...item, url: `/api/attachments/${item.id}` })),
+        reactions: [...reactionsMap].map(([emoji, userIds]) => ({ emoji, userIds })),
+      }];
+    });
+  };
+
   const message = async (messageId: string): Promise<Message> => {
-    const found = await db.getMessage(messageId);
+    const [found] = await messages([messageId]);
     if (!found) throw new ApiError(404, 'Message not found');
-    const reactionsMap = new Map<string, string[]>();
-    for (const reaction of await db.getMessageReactions(messageId)) {
-      reactionsMap.set(reaction.emoji, [...(reactionsMap.get(reaction.emoji) ?? []), reaction.userId]);
-    }
-    const attachments = (await db.getMessageAttachments(messageId)).map(item => ({ ...item, url: `/api/attachments/${item.id}` }));
-    return {
-      ...found,
-      attachments,
-      reactions: [...reactionsMap].map(([emoji, userIds]) => ({ emoji, userIds })),
-    };
+    return found;
   };
 
   const conversation = async (conversationId: string) => {
@@ -215,17 +293,35 @@ export function createApp({
 
   const emitMessage = async (value: Message, updated = false) => emitUsers(await scopeAudience(value), updated ? 'message:update' : 'message', value);
 
-  const leaveVoice = async (socket: Socket) => {
+  // Synchronous half of leaving voice. voice:join uses it so that the capacity check, room switch
+  // and insertion happen without an intervening await (no other socket's join can interleave).
+  const detachVoice = (socket: Socket) => {
     const current = voice.get(socket.id);
-    if (!current) return;
+    if (!current) return undefined;
+    for (const [viewerId, subscriptions] of streamSubscriptions) {
+      if (viewerId === socket.id) {
+        subscriptions.forEach((broadcastId, target) => io.to(target).emit('voice:stream-unwatch', { viewerSocketId: socket.id, broadcastId }));
+        streamSubscriptions.delete(viewerId);
+      } else {
+        subscriptions.delete(socket.id);
+        if (!subscriptions.size) streamSubscriptions.delete(viewerId);
+      }
+    }
     socket.leave(`voice:${current.channelId}`);
     voice.delete(socket.id);
     io.to(`voice:${current.channelId}`).emit('voice:peer-left', { socketId: socket.id });
+    return current;
+  };
+
+  const leaveVoice = async (socket: Socket) => {
+    const current = detachVoice(socket);
+    if (!current) return;
     const ch = await db.getChannel(current.channelId);
     if (ch) await syncServer(ch.serverId);
   };
 
   const revoke = async (userId: string, serverId: string, reason = 'membership-revoked') => {
+    let disconnectedCount = 0;
     for (const socket of io.sockets.sockets.values()) {
       if (socket.data.userId === userId) {
         const current = voice.get(socket.id);
@@ -234,10 +330,12 @@ export function createApp({
           if (ch?.serverId === serverId) {
             socket.emit('voice:disconnect', { reason });
             await leaveVoice(socket);
+            disconnectedCount++;
           }
         }
       }
     }
+    return disconnectedCount;
   };
 
   const api = (handler: (request: AuthRequest, response: Response) => unknown) => (request: Request, response: Response, next: NextFunction) => {
@@ -266,20 +364,34 @@ export function createApp({
 
   app.get('/health', (_request, response) => response.json({ ok: true, version: '0.4.1' }));
   app.get('/api/health', (_request, response) => response.json({ ok: true, version: '0.4.1', ...(configuredPublicUrl ? { webUrl: configuredPublicUrl } : {}) }));
-  const isHostedMode = Boolean(db.isPostgres && supabaseUrl && supabaseAnonKey);
+  // Readiness, unlike liveness (/api/health), proves the database answers. Use it for platform health
+  // checks and deploy postflight; it reports whether durable hosted logout enforcement is installed.
+  app.get('/api/ready', async (_request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    if (closing) return response.status(503).json({ ok: false, reason: 'shutting-down' });
+    try {
+      await Promise.race([db.checkConnection(), new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000).unref())]);
+      const sessionRevocation = isHostedMode && db.isAuthSessionActive
+        ? (await db.isAuthSessionActive('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000').catch(() => undefined)) === undefined ? 'unavailable' : 'enforced'
+        : undefined;
+      response.json({ ok: true, version: '0.4.1', database: 'ok', ...(sessionRevocation ? { sessionRevocation } : {}) });
+    } catch {
+      response.status(503).json({ ok: false, database: 'unavailable' });
+    }
+  });
   app.get('/api/config', (_request, response) => response.json({
+    capabilities: { streamSubscriptions: 1 },
     ...(configuredPublicUrl ? { publicUrl: configuredPublicUrl } : {}),
     ...(isHostedMode ? {
       mode: 'hosted',
       supabaseUrl,
       supabaseAnonKey,
-    } : {}),
+    } : { mode: 'local' }),
   }));
 
   const validInvite = async (code: string) => {
     const found = await db.getInvite(code);
-    if (!found || found.revokedAt !== null) throw new ApiError(404, 'Invite is invalid or has been revoked');
-    if (found.expiresAt !== null && found.expiresAt <= now()) throw new ApiError(410, 'This invite has expired. Ask for a new invitation.');
+    assertActiveInvite(found);
     return found;
   };
 
@@ -300,17 +412,22 @@ export function createApp({
     path: '/',
   });
 
-  const issueSession = async (request: Request, response: Response, userId: string) => {
+  const issueSession = async (request: Request, response: Response, userId: string, rememberSession = true) => {
     const token = randomBytes(32).toString('hex');
     await db.createSession(tokenHash(token), userId, now() + 30 * 24 * 3600_000);
-    response.cookie('relay_session', token, { ...getCookieOptions(request), maxAge: 30 * 24 * 3600_000 });
+    response.cookie('relay_session', token, { ...getCookieOptions(request), ...(rememberSession ? { maxAge: 30 * 24 * 3600_000 } : {}) });
   };
 
   const username = z.string().trim().min(3).max(32).regex(usernameExpression, 'Usernames use letters, numbers, underscores, dots or hyphens');
   const credentials = z.object({ username, password: z.string().min(8).max(128), displayName: z.preprocess(value => typeof value === 'string' && !value.trim() ? undefined : value, text(50).optional()) });
-  const loginCredentials = z.object({ username: z.string().max(128).transform(normalizeLoginUsername).pipe(username), password: z.string().min(1).max(128) });
+  const loginCredentials = z.object({ username: z.string().max(128).transform(normalizeLoginUsername).pipe(username), password: z.string().min(1).max(128), rememberSession: z.boolean().default(true) });
 
-  app.post('/api/auth/register', api(async (request, response) => {
+  const localAccountsOnly = (_request: Request, response: Response, next: NextFunction) => {
+    if (isHostedMode) return response.status(403).json({ error: 'This Haven server uses hosted accounts. Sign in with your email address instead.' });
+    next();
+  };
+
+  app.post('/api/auth/register', localAccountsOnly, api(async (request, response) => {
     rate(`auth:${request.ip}`, 20, 3600_000);
     const body = credentials.parse(request.body);
     const existing = await db.getUserByUsername(body.username);
@@ -331,7 +448,7 @@ export function createApp({
     response.status(201).json({ user: await user(userId, true) });
   }));
 
-  app.post('/api/auth/login', api(async (request, response) => {
+  app.post('/api/auth/login', localAccountsOnly, api(async (request, response) => {
     rate(`auth:${request.ip}`, 40, 3600_000);
     const body = loginCredentials.parse(request.body);
     const found = await db.getUserByUsername(body.username);
@@ -340,20 +457,33 @@ export function createApp({
     if (!found || !expected || !timingSafeEqual(actual, Buffer.from(expected, 'hex'))) {
       throw new ApiError(401, 'Invalid username or password');
     }
-    await issueSession(request, response, found.id);
+    await issueSession(request, response, found.id, body.rememberSession);
     response.json({ user: await user(found.id, true) });
   }));
 
   app.use('/api', async (request: AuthRequest, response, next) => {
     try {
-      request.userId = await resolveUserId(request.headers.cookie, request.headers.authorization);
-      if (!request.userId) return response.status(401).json({ error: 'Sign in to continue' });
+      const identity = await resolveUser(request.headers.cookie, request.headers.authorization);
+      if (!identity) return response.status(401).json({ error: 'Sign in to continue' });
+      request.userId = identity.userId;
+      request.viaSupabase = identity.viaSupabase;
       rate(`api:${request.userId}`, 300);
+      const profile = request.profile = await user(request.userId, true);
+      const onboardingRoute = ['/auth/me', '/auth/logout', '/bootstrap', '/users/me/profile', '/users/me/avatar', '/users/username-available'].includes(request.path)
+        || (request.method === 'GET' && /^\/users\/[^/]+\/avatar$/.test(request.path));
+      if (profile.settings?.profileCompleted === false && !onboardingRoute) {
+        return response.status(403).json({ error: 'Complete your profile to continue' });
+      }
       next();
     } catch (error) { next(error); }
   });
 
+  // Hosted logout ends only the current provider session (this device) unless the client explicitly asks
+  // for `scope: 'global'` (every device of the account). Refreshed tokens share their session's session_id.
+  const logoutScope = z.object({ scope: z.enum(['local', 'global']).default('local') });
+
   app.post('/api/auth/logout', api(async (request, response) => {
+    const scope = logoutScope.parse(request.body ?? {}).scope;
     const token = parseCookies(request.headers.cookie).relay_session;
     if (token) await db.deleteSession(tokenHash(token));
     const headerToken = request.headers.authorization?.startsWith('Bearer ') ? request.headers.authorization.slice(7).trim() : null;
@@ -361,40 +491,64 @@ export function createApp({
       await db.deleteSession(tokenHash(headerToken));
       if (supabaseVerifier) {
         supabaseVerifier.invalidateToken(headerToken);
+        if (request.viaSupabase) revokedAccessTokens.set(tokenHash(headerToken), SupabaseAuthVerifier.tokenExpiresAt(headerToken) ?? now() + 3600_000);
       }
     }
+    const loggedOut = new Set([token, headerToken].filter((value): value is string => Boolean(value)).map(tokenHash));
+    // The provider accepted headerToken for this request, so its session_id claim is authentic.
+    const sessionId = request.viaSupabase && headerToken ? SupabaseAuthVerifier.tokenSessionId(headerToken) : undefined;
+    const endsSession = (userId: string, tokenSessionId: string | undefined) => Boolean(request.viaSupabase) && userId === request.userId
+      && (scope === 'global' || (sessionId !== undefined && tokenSessionId === sessionId));
+    for (const [hash, value] of observedAccessTokens) {
+      if (endsSession(value.userId, value.sessionId)) revokedAccessTokens.set(hash, value.expiresAt);
+    }
     for (const socket of io.sockets.sockets.values()) {
-      if (socket.data.sessionHash === tokenHash(token ?? '') || socket.data.sessionHash === tokenHash(headerToken ?? '')) {
+      // Every hosted socket of the ended session(s) closes too, including sockets authenticated with
+      // older or refreshed access tokens. Other devices keep their sockets on a local-scope logout.
+      if (loggedOut.has(socket.data.sessionHash) || loggedOut.has(socket.data.supabaseTokenHash)
+        || (socket.data.supabaseToken && endsSession(socket.data.userId, SupabaseAuthVerifier.tokenSessionId(socket.data.supabaseToken)))) {
+        if (socket.data.supabaseToken) {
+          supabaseVerifier?.invalidateToken(socket.data.supabaseToken);
+          revokedAccessTokens.set(socket.data.supabaseTokenHash, socket.data.supabaseTokenExpiresAt ?? now() + 3600_000);
+        }
         socket.disconnect(true);
       }
     }
+    // Also end the provider session(s) server-side, so the logout is durable (auth.sessions) and seen by
+    // every backend instance even if the client never completes its own Supabase sign-out. Bounded so an
+    // unreachable provider cannot hang logout; local revocation above has already taken effect.
+    const providerSignedOut = request.viaSupabase && headerToken && supabaseVerifier
+      ? await Promise.race([supabaseVerifier.revokeProviderSessions(headerToken, scope), new Promise<boolean>(resolve => setTimeout(() => resolve(false), 5000).unref())])
+      : undefined;
     response.clearCookie('relay_session', getCookieOptions(request));
-    response.json({ ok: true });
+    response.json({ ok: true, ...(providerSignedOut === undefined ? {} : { providerSignedOut, scope }) });
   }));
 
   app.get('/api/auth/me', api(async (request, response) => response.json({ user: await user(request.userId!, true) })));
 
   app.get('/api/bootstrap', api(async (request, response) => {
     const userId = request.userId!;
-    const servers = await db.getUserServers(userId);
-    const channels = await db.getUserChannels(userId);
-    const conversations = await db.getUserConversations(userId);
-    const requests = await db.getFriendRequests(userId);
-    const friends = await db.getFriends(userId);
-    const blocked = await db.getBlocked(userId);
-    const visibleIds = await db.getVisibleUsers(userId);
-    const visibleUsers = await Promise.all(visibleIds.map(uid => user(uid).catch(() => null)));
-    const serverEmojis = (await db.getUserServerEmojis(userId)).map(serverEmoji);
+    const me = request.profile ?? await user(userId, true);
+    if (me.settings?.profileCompleted === false) {
+      return response.json({ user: me, servers: [], channels: [], conversations: [], requests: [], friends: [], blocked: [], users: [me], voice: [], serverEmojis: [] });
+    }
+    // Constant query count regardless of community/conversation size.
+    const [servers, channels, conversations, requests, friends, blocked, visibleIds, emojiRows] = await Promise.all([
+      db.getUserServers(userId), db.getUserChannels(userId), db.getUserConversations(userId), db.getFriendRequests(userId),
+      db.getFriends(userId), db.getBlocked(userId), db.getVisibleUsers(userId), db.getUserServerEmojis(userId),
+    ]);
+    const visibleUsers = await users(visibleIds);
+    const serverEmojis = emojiRows.map(serverEmoji);
 
     response.json({
-      user: await user(userId, true),
+      user: me,
       servers,
       channels,
       conversations,
       requests,
       friends,
       blocked,
-      users: visibleUsers.filter(Boolean),
+      users: visibleUsers,
       voice: [...voice.values()].filter(peer => channels.some(row => row.id === peer.channelId)),
       serverEmojis,
     });
@@ -409,13 +563,13 @@ export function createApp({
       settings: z.record(z.string(), z.unknown()).optional(),
     }).parse(request.body);
 
-    const current = await user(request.userId!, true);
+    if (body.settings && Object.hasOwn(body.settings, 'profileCompleted')) throw new ApiError(400, 'Profile completion can only be changed through onboarding');
     await db.updateUser(request.userId!, {
-      displayName: body.displayName ?? current.displayName,
-      bio: body.bio ?? current.bio,
-      avatar: body.avatar ?? current.avatar,
-      status: body.status ?? current.status,
-      settings: body.settings ? JSON.stringify({ ...current.settings, ...body.settings }) : undefined,
+      displayName: body.displayName,
+      bio: body.bio,
+      avatar: body.avatar,
+      status: body.status,
+      settings: body.settings ? JSON.stringify(body.settings) : undefined,
     });
 
     const profile = await user(request.userId!);
@@ -427,6 +581,76 @@ export function createApp({
     emitUsers(body.avatar !== undefined || body.displayName !== undefined || body.bio !== undefined || body.status !== undefined ? audience : [request.userId!], 'sync');
     if (body.status !== undefined) emitUsers(audience, 'presence', { userId: request.userId, status: profile.status });
     response.json({ user: await user(request.userId!, true) });
+  }));
+
+  app.get('/api/users/username-available', api(async (request, response) => {
+    rate(`username-check:${request.userId}`, 60);
+    const candidate = z.string().max(128).parse(request.query.username ?? '').trim().replace(/^@/, '');
+    const problem = usernameProblem(candidate);
+    if (problem) return response.json({ available: false, reason: problem });
+    const found = await db.getUserByUsername(candidate);
+    const available = !found || found.id === request.userId;
+    response.json({ available, ...(available ? {} : { reason: 'That username is already taken' }) });
+  }));
+
+  // First-time onboarding: username and display name are chosen once, after authentication, and the
+  // completion flag is stored with the account so it persists across sessions and devices.
+  app.post('/api/users/me/profile', api(async (request, response) => {
+    rate(`profile:${request.userId}`, 20);
+    const body = z.object({ username: z.string().max(128), displayName: text(50) }).parse(request.body);
+    const chosen = body.username.trim().replace(/^@/, '');
+    const problem = usernameProblem(chosen);
+    if (problem) throw new ApiError(400, `Username: ${problem}`);
+    const current = await user(request.userId!, true);
+    if (current.settings?.profileCompleted !== false) throw new ApiError(409, 'Your profile is already complete');
+    const result = await db.completeUserProfile(request.userId!, chosen, body.displayName);
+    if (result === 'unavailable') throw new ApiError(409, 'That username is already taken');
+    if (result === 'already-complete') throw new ApiError(409, 'Your profile is already complete');
+    const profile = await user(request.userId!);
+    for (const peer of voice.values()) if (peer.user.id === request.userId) peer.user = profile;
+    const audience = await db.getVisibleUsers(request.userId!);
+    emitUsers(audience, 'user:update', profile);
+    emitUsers(audience, 'sync');
+    response.json({ user: await user(request.userId!, true) });
+  }));
+
+  const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024, files: 1, fields: 0 } });
+  const avatarUrlPattern = (userId: string) => new RegExp(`^/api/users/${userId}/avatar\\?v=([a-f0-9-]+\\.(?:png|jpg|webp|gif))$`);
+  const avatarExtension: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+
+  app.post('/api/users/me/avatar', (request: AuthRequest, _response, next) => {
+    try { rate(`upload:${request.userId}`, 20); next(); } catch (error) { next(error); }
+  }, avatarUpload.single('file'), api(async (request, response) => {
+    if (!request.file) throw new ApiError(400, 'Choose a profile picture up to 1 MB');
+    let info;
+    try { info = inspectRaster(request.file.buffer, 2048); } catch (error) { throw new ApiError(400, error instanceof Error ? error.message : 'Invalid image'); }
+    if (info.animated) throw new ApiError(400, 'Profile pictures must be static images');
+    const userId = request.userId!;
+    const version = `${id()}.${avatarExtension[info.mime]}`;
+    const diskName = `avatar-${version}`;
+    const previous = (await db.getUser(userId))?.avatar.match(avatarUrlPattern(userId))?.[1];
+    try {
+      await storage.upload('avatars', diskName, request.file.buffer, info.mime);
+      await db.updateUser(userId, { avatar: `/api/users/${userId}/avatar?v=${version}` });
+    } catch (error) {
+      await storage.remove('avatars', diskName);
+      throw error;
+    }
+    if (previous) await storage.remove('avatars', `avatar-${previous}`);
+    const profile = await user(userId);
+    for (const peer of voice.values()) if (peer.user.id === userId) peer.user = profile;
+    const audience = await db.getVisibleUsers(userId);
+    emitUsers(audience, 'user:update', profile);
+    emitUsers(audience, 'sync');
+    response.json({ user: await user(userId, true) });
+  }));
+
+  app.get('/api/users/:id/avatar', api(async (request, response) => {
+    const userId = request.params.id as string;
+    const found = await db.getUser(userId);
+    const version = found?.avatar.match(avatarUrlPattern(userId))?.[1];
+    if (!found || !version) throw new ApiError(404, 'Profile picture not found');
+    await serveFile(response, 'avatars', { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' }[version.split('.')[1]] ?? 'application/octet-stream', `avatar-${version}`);
   }));
 
   const iconValue = z.string().trim().max(300).refine(value => !value || value.startsWith('/api/servers/') || (value.length <= 32 && !/[\/:<>]/.test(value)) || (() => { try { const parsed = new URL(value); return parsed.protocol === 'https:' && !parsed.username && !parsed.password; } catch { return false; } })(), 'Use an HTTPS image URL, emoji or uploaded icon');
@@ -485,12 +709,13 @@ export function createApp({
   app.get('/api/servers/:id/members', api(async (request, response) => {
     await member(request.userId!, request.params.id as string);
     const membersList = await db.getServerMembers(request.params.id as string);
-    const mapped = await Promise.all(membersList.map(async row => ({
-      user: await user(row.userId),
+    const profiles = new Map((await users(membersList.map(row => row.userId))).map(profile => [profile.id, profile]));
+    const mapped = membersList.filter(row => profiles.has(row.userId)).map(row => ({
+      user: profiles.get(row.userId)!,
       role: row.role,
       serverMuted: row.serverMuted,
       serverDeafened: row.serverDeafened,
-    })));
+    }));
     response.json({ members: mapped });
   }));
 
@@ -504,7 +729,10 @@ export function createApp({
     }
     const body = z.object({ action: z.enum(['disconnect', 'mute', 'deafen']), enabled: z.boolean().default(true) }).parse(request.body);
     if (body.action === 'disconnect') {
-      await revoke(targetId, serverId, 'moderator-disconnected');
+      const disconnected = await revoke(targetId, serverId, 'moderator-disconnected');
+      if (disconnected === 0) {
+        throw new ApiError(400, 'Member is not connected to voice');
+      }
     } else {
       await db.updateMemberVoice(serverId, targetId, { [body.action === 'mute' ? 'serverMuted' : 'serverDeafened']: body.enabled });
       const flags = (await member(targetId, serverId))!;
@@ -572,6 +800,7 @@ export function createApp({
     const createdAt = now();
     const expiresAt = body.expiresInHours === null ? null : createdAt + body.expiresInHours * 3600_000;
     await db.createInvite({ code, serverId: request.params.id as string, createdAt, expiresAt });
+    emitUsers(await serverAudience(request.params.id as string), 'invites:changed', { serverId: request.params.id });
     response.status(201).json({ code, expiresAt });
   }));
 
@@ -586,11 +815,11 @@ export function createApp({
     if (!found) throw new ApiError(404, 'Invite not found');
     await member(request.userId!, found.serverId, true);
     await db.revokeInvite(found.code, now());
+    emitUsers(await serverAudience(found.serverId), 'invites:changed', { serverId: found.serverId, revokedCode: found.code });
     response.json({ ok: true });
   }));
 
   app.post('/api/invites/:code/join', api(async (request, response) => {
-    await validInvite(request.params.code as string);
     const invitation = await db.joinInvite(request.params.code as string, request.userId!);
     await syncServer(invitation.serverId);
     response.json({ serverId: invitation.serverId });
@@ -632,12 +861,13 @@ export function createApp({
     const value = scopeSchema.parse(request.query);
     await scope(request.userId!, value, true);
     const limit = z.coerce.number().int().min(1).max(100).default(50).parse(request.query.limit);
-    const before = z.coerce.number().min(0).default(Number.MAX_SAFE_INTEGER).parse(request.query.before);
+    const before = z.coerce.number().int().min(0).default(Number.MAX_SAFE_INTEGER).parse(request.query.before);
+    // Optional tie-breaker: continue after this exact message when several share the `before` timestamp.
+    const beforeId = z.string().min(1).max(128).optional().parse(request.query.beforeId);
     const query = z.string().max(200).default('').parse(request.query.q);
-    const messageIds = await db.getMessages(value, before, query, limit + 1);
+    const messageIds = await db.getMessages(value, before, query, limit + 1, beforeId);
     const slice = messageIds.slice(0, limit).reverse();
-    const fullMessages = await Promise.all(slice.map(mid => message(mid)));
-    response.json({ messages: fullMessages, hasMore: messageIds.length > limit });
+    response.json({ messages: await messages(slice), hasMore: messageIds.length > limit });
   }));
 
   const validateEmojiTokens = async (userId: string, content: string, channelId?: string | null) => {
@@ -656,7 +886,7 @@ export function createApp({
       conversationId: z.string().optional(),
       content: z.string().trim().max(4000).default(''),
       replyTo: z.string().nullable().optional(),
-      attachmentIds: z.array(z.string()).max(10).default([]),
+      attachmentIds: z.array(z.string()).max(10).default([]).transform(ids => [...new Set(ids)]),
     }).parse(request.body);
 
     await scope(request.userId!, body, true, true);
@@ -1087,23 +1317,31 @@ export function createApp({
     try {
       let authUserId: string | undefined;
       const token = socket.handshake.auth?.token || (socket.handshake.headers.authorization?.startsWith('Bearer ') ? socket.handshake.headers.authorization.slice(7).trim() : undefined);
-      if (token && supabaseVerifier) {
+      if (closing) return next(new Error('Server is restarting'));
+      if (token && supabaseVerifier && !tokenRevoked(tokenHash(token))) {
         const verifiedResult = await supabaseVerifier.verifyAccessTokenWithDetails(token);
         if (verifiedResult.unconfirmedEmail) {
           return next(new Error('Email address must be verified before signing in'));
         }
         if (verifiedResult.user) {
+          observeToken(token, verifiedResult.user.id);
           await supabaseVerifier.ensureHavenUser(db, verifiedResult.user);
+          if (tokenRevoked(tokenHash(token))) return next(new Error('Sign in to continue'));
           authUserId = verifiedResult.user.id;
-          socket.data.isSupabase = true;
-          socket.data.token = token;
+          // Kept for continuing validation: expiry per event, revocation on logout and periodic provider rechecks.
+          socket.data.supabaseToken = token;
+          socket.data.supabaseTokenHash = tokenHash(token);
+          socket.data.supabaseTokenExpiresAt = SupabaseAuthVerifier.tokenExpiresAt(token);
+          socket.data.verifiedAt = now();
+        } else if (verifiedResult.unavailable && isHostedMode) {
+          return next(new Error('Sign-in is temporarily unavailable. Try again shortly.'));
         }
       }
-      if (!authUserId && token) {
+      if (!authUserId && token && !isHostedMode) {
         authUserId = await db.getSessionUserId(tokenHash(token), now());
         if (authUserId) socket.data.sessionHash = tokenHash(token);
       }
-      if (!authUserId) {
+      if (!authUserId && !isHostedMode) {
         const cookie = socket.request.headers.cookie;
         const cookieToken = parseCookies(cookie).relay_session;
         if (cookieToken) {
@@ -1112,6 +1350,7 @@ export function createApp({
         }
       }
       if (!authUserId) return next(new Error('Sign in to continue'));
+      if ((await user(authUserId, true)).settings?.profileCompleted === false) return next(new Error('Complete your profile to continue'));
       socket.data.userId = authUserId;
       next();
     } catch {
@@ -1119,30 +1358,58 @@ export function createApp({
     }
   });
 
-  io.on('connection', async socket => {
+  // Synchronous: every listener is installed before the first await, so events a client emits
+  // immediately after `connect` are never dropped. Presence is announced afterwards.
+  io.on('connection', socket => {
     const userId = socket.data.userId as string;
     socket.join(`user:${userId}`);
-    const me = await user(userId).catch(() => null);
-    if (me) {
-      const audience = await db.getVisibleUsers(userId);
-      emitUsers(audience, 'presence', { userId, status: me.status });
-    }
 
+    let voiceControlQueue = Promise.resolve<unknown>(undefined);
     const event = (name: string, handler: (payload: any) => Promise<unknown> | unknown) =>
-      socket.on(name, async (payload = {}, ack?: (result: unknown) => void) => {
+      socket.on(name, (payload = {}, ack?: (result: unknown) => void) => {
+        const run = async () => {
         try {
+          if (!socket.connected) throw new ApiError(401, 'Connection closed');
+          if (closing) throw new ApiError(503, 'Server is restarting');
           if (socket.data.sessionHash) {
             const valid = await db.hasValidSession(socket.data.sessionHash, now());
-            if (!valid) { socket.disconnect(true); throw new ApiError(401, 'Session expired'); }
+            if (!valid) throw new SessionEnded();
           }
+          if (socket.data.supabaseToken && !supabaseSocketCurrent(socket)) throw new SessionEnded();
           if (name === 'voice:activity') rate(`voice-activity:${socket.id}`, 240);
           else rate(`socket:${userId}`, 300);
           const result = await handler(payload);
           if (typeof ack === 'function') ack(result ?? { ok: true });
         } catch (error) {
           if (typeof ack === 'function') ack({ error: error instanceof Error ? error.message : 'Request failed' });
+          if (error instanceof SessionEnded) socket.disconnect(true);
         }
+        };
+        if (['voice:join', 'voice:leave', 'voice:state', 'voice:stream-watch', 'voice:stream-unwatch'].includes(name)) {
+          voiceControlQueue = voiceControlQueue.catch(() => {}).then(run);
+          track(voiceControlQueue);
+        } else track(run());
       });
+
+    // Hosted clients send their refreshed Supabase access token so long calls survive token rotation.
+    socket.on('auth:refresh', (payload: unknown, ack?: (result: unknown) => void) => track((async () => {
+      try {
+        if (!socket.data.supabaseToken || !supabaseVerifier) throw new ApiError(400, 'This connection does not use hosted sign-in');
+        rate(`auth-refresh:${socket.id}`, 30);
+        const token = z.object({ token: z.string().min(1).max(8192) }).parse(payload).token;
+        if (tokenRevoked(socket.data.supabaseTokenHash) || tokenRevoked(tokenHash(token))) throw new SessionEnded();
+        const result = await supabaseVerifier.verifyAccessTokenWithDetails(token);
+        if (result.unavailable) throw new ApiError(503, 'Sign-in is temporarily unavailable. Try again shortly.');
+        if (result.user?.id !== userId) throw new SessionEnded();
+        if (!socket.connected || closing || tokenRevoked(socket.data.supabaseTokenHash) || tokenRevoked(tokenHash(token))) throw new SessionEnded();
+        observeToken(token, userId);
+        Object.assign(socket.data, { supabaseToken: token, supabaseTokenHash: tokenHash(token), supabaseTokenExpiresAt: SupabaseAuthVerifier.tokenExpiresAt(token), verifiedAt: now() });
+        if (typeof ack === 'function') ack({ ok: true });
+      } catch (error) {
+        if (typeof ack === 'function') ack({ error: error instanceof z.ZodError ? 'Invalid token' : error instanceof Error ? error.message : 'Request failed' });
+        if (error instanceof SessionEnded) socket.disconnect(true);
+      }
+    })()));
 
     event('typing', async payload => {
       const value = scopeSchema.parse(payload);
@@ -1153,16 +1420,19 @@ export function createApp({
     });
 
     event('voice:join', async payload => {
-      const body = z.object({ channelId: z.string() }).parse(payload);
+      const body = z.object({ channelId: z.string(), streamProtocol: z.literal(1).optional() }).parse(payload);
       const current = await channel(userId, body.channelId);
       if (current.type !== 'voice') throw new ApiError(400, 'Choose a voice channel');
-      const peers = [...voice.values()].filter(peer => peer.channelId === current.id && peer.socketId !== socket.id);
-      if (peers.length >= 8) throw new ApiError(409, 'Voice channel is full (8 participants)');
       const flags = (await member(userId, current.serverId))!;
       const moderation = { serverId: current.serverId, muted: flags.serverMuted, deafened: flags.serverDeafened };
-      if (voice.get(socket.id)?.channelId === current.id) return { peers, moderation };
-      await leaveVoice(socket);
       const profile = await user(userId);
+      // No await from here until the participant is inserted: other sockets' joins are serialized
+      // only by the event loop, so the capacity check and insertion must be one synchronous step.
+      if (!socket.connected) throw new ApiError(401, 'Connection closed');
+      const peers = [...voice.values()].filter(peer => peer.channelId === current.id && peer.socketId !== socket.id);
+      if (voice.get(socket.id)?.channelId === current.id) return { peers, moderation, capabilities: { streamSubscriptions: 1 } };
+      if (peers.length >= 8) throw new ApiError(409, 'Voice channel is full (8 participants)');
+      const previous = detachVoice(socket);
       const participant: VoicePeer = {
         socketId: socket.id,
         user: profile,
@@ -1173,12 +1443,15 @@ export function createApp({
         serverDeafened: moderation.deafened,
         sharing: false,
         speaking: false,
+        streamProtocol: body.streamProtocol,
       };
       voice.set(socket.id, participant);
       socket.join(`voice:${current.id}`);
       socket.to(`voice:${current.id}`).emit('voice:peer-joined', participant);
+      const previousChannel = previous && await db.getChannel(previous.channelId);
+      if (previousChannel && previousChannel.serverId !== current.serverId) await syncServer(previousChannel.serverId);
       await syncServer(current.serverId);
-      return { peers, moderation };
+      return { peers, moderation, capabilities: { streamSubscriptions: 1 } };
     });
 
     event('voice:leave', async () => { await leaveVoice(socket); });
@@ -1194,15 +1467,62 @@ export function createApp({
       if (!source || !target || source.channelId !== target.channelId) throw new ApiError(403, 'Voice peer permission denied');
       await channel(userId, source.channelId);
       await channel(target.user.id, target.channelId);
+      if (voice.get(socket.id) !== source || voice.get(body.target) !== target || source.channelId !== target.channelId) throw new ApiError(403, 'Voice membership changed');
       io.to(body.target).emit('voice:signal', { from: socket.id, description: body.description, candidate: body.candidate });
     });
 
+    let streamControlQueue = Promise.resolve<unknown>(undefined);
+    const streamControl = (handler: (payload: unknown) => Promise<unknown>) => (payload: unknown) => {
+      const operation = streamControlQueue.catch(() => {}).then(() => handler(payload));
+      streamControlQueue = operation;
+      return operation;
+    };
+    event('voice:stream-watch', streamControl(async payload => {
+      const body = z.object({ target: z.string().max(128), broadcastId: z.string().uuid() }).parse(payload);
+      const source = voice.get(socket.id);
+      const target = voice.get(body.target);
+      if (!source || !target || source === target || source.channelId !== target.channelId) throw new ApiError(403, 'Voice peer permission denied');
+      if (source.streamProtocol !== 1 || target.streamProtocol !== 1) throw new ApiError(409, 'The broadcaster needs an updated Haven client');
+      await channel(userId, source.channelId);
+      await channel(target.user.id, target.channelId);
+      if (voice.get(socket.id) !== source || voice.get(body.target) !== target || source.channelId !== target.channelId) throw new ApiError(403, 'Voice membership changed');
+      if (!target.sharing || target.broadcastId !== body.broadcastId) throw new ApiError(409, 'This broadcast has ended');
+      const subscriptions = streamSubscriptions.get(socket.id) ?? new Map<string, string>();
+      subscriptions.set(body.target, body.broadcastId);
+      streamSubscriptions.set(socket.id, subscriptions);
+      io.to(body.target).emit('voice:stream-watch', { viewerSocketId: socket.id, broadcastId: body.broadcastId });
+      return { protocol: 1, broadcastId: body.broadcastId };
+    }));
+
+    event('voice:stream-unwatch', streamControl(async payload => {
+      const body = z.object({ target: z.string().max(128), broadcastId: z.string().uuid().optional() }).parse(payload);
+      const source = voice.get(socket.id);
+      const target = voice.get(body.target);
+      if (!source || !target || source.channelId !== target.channelId) return;
+      const subscriptions = streamSubscriptions.get(socket.id);
+      const broadcastId = subscriptions?.get(body.target);
+      if (!broadcastId || body.broadcastId && body.broadcastId !== broadcastId) return { protocol: 1 };
+      subscriptions!.delete(body.target);
+      if (!subscriptions!.size) streamSubscriptions.delete(socket.id);
+      io.to(body.target).emit('voice:stream-unwatch', { viewerSocketId: socket.id, broadcastId });
+      return { protocol: 1 };
+    }));
+
     event('voice:state', async payload => {
-      const body = z.object({ muted: z.boolean(), deafened: z.boolean(), sharing: z.boolean() }).parse(payload);
+      const body = z.object({ muted: z.boolean(), deafened: z.boolean(), sharing: z.boolean(), broadcastId: z.string().uuid().optional() }).parse(payload);
       const current = voice.get(socket.id);
       if (!current) throw new ApiError(400, 'Join voice first');
       const currentChannel = await channel(userId, current.channelId);
+      if (voice.get(socket.id) !== current) return;
+      if (body.sharing && current.streamProtocol === 1 && !body.broadcastId) throw new ApiError(400, 'Missing broadcast identity');
+      if (current.broadcastId && (!body.sharing || body.broadcastId !== current.broadcastId)) {
+        for (const [viewer, subscriptions] of streamSubscriptions) {
+          subscriptions.delete(socket.id);
+          if (!subscriptions.size) streamSubscriptions.delete(viewer);
+        }
+      }
       Object.assign(current, body, {
+        broadcastId: body.sharing ? body.broadcastId : undefined,
         muted: body.muted || Boolean(current.serverMuted) || Boolean(current.serverDeafened),
         deafened: body.deafened || Boolean(current.serverDeafened),
       });
@@ -1213,6 +1533,8 @@ export function createApp({
         muted: current.muted,
         deafened: current.deafened,
         sharing: current.sharing,
+        broadcastId: current.broadcastId,
+        streamProtocol: current.streamProtocol,
         speaking: current.speaking ?? false,
         serverMuted: current.serverMuted ?? false,
         serverDeafened: current.serverDeafened ?? false,
@@ -1241,13 +1563,19 @@ export function createApp({
       io.to(`voice:${current.channelId}`).emit('sound:play', { sound: sound(found), userId });
     });
 
-    socket.on('disconnect', async () => {
+    socket.on('disconnect', () => track((async () => {
+      await voiceControlQueue.catch(() => {});
       await leaveVoice(socket);
       if (!connected(userId)) {
         const audience = await db.getVisibleUsers(userId);
         emitUsers(audience, 'presence', { userId, status: 'offline' });
       }
-    });
+    })().catch(error => console.error('Socket disconnect cleanup failed:', error))));
+
+    track((async () => {
+      const me = await user(userId);
+      if (socket.connected) emitUsers(await db.getVisibleUsers(userId), 'presence', { userId, status: me.status });
+    })().catch(() => {}));
   });
 
   const resolvedStaticDir = staticDir || (existsSync(path.resolve('dist')) ? path.resolve('dist') : (existsSync(path.resolve('../web/dist')) ? path.resolve('../web/dist') : path.resolve('dist')));
@@ -1271,22 +1599,34 @@ export function createApp({
 
   app.use((_request, response) => response.status(404).json({ error: 'Endpoint not found' }));
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
+    if (error instanceof HostedProfileReviewRequiredError) return response.status(503).json({ error: error.message });
     if (error instanceof z.ZodError) return response.status(400).json({ error: error.issues.map(issue => issue.message).join('; ') });
-    if (error instanceof ApiError) return response.status(error.status).json({ error: error.message });
+    if (error instanceof ApiError || error instanceof InviteUnavailableError || error instanceof AttachmentClaimError || error instanceof FriendRequestConflictError) {
+      return response.status(error.status).json({ error: error.message });
+    }
     if (error instanceof multer.MulterError) return response.status(400).json({ error: error.message });
     if (error instanceof SyntaxError) return response.status(400).json({ error: 'Invalid JSON' });
+    // body-parser/http-errors client errors (e.g. 413 over the JSON limit) are safe to expose as-is.
+    const clientError = error as { status?: unknown; expose?: unknown; message?: string };
+    if (clientError?.expose === true && typeof clientError.status === 'number' && clientError.status >= 400 && clientError.status < 500) {
+      return response.status(clientError.status).json({ error: clientError.status === 413 ? 'Request is too large' : clientError.message });
+    }
     console.error(error);
     response.status(500).json({ error: 'Internal server error' });
   });
 
   const close = async () => {
+    closing = true;
     clearInterval(cleanupTimer);
     await new Promise<void>(resolve => io.close(() => resolve()));
     if (httpServer.listening) await new Promise<void>((resolve, reject) => httpServer.close(error => error ? reject(error) : resolve()));
+    // Socket.IO fires async disconnect cleanup (voice leave, presence) without awaiting it.
+    // Drain that work, and anything it schedules, before the database pool is ended.
+    while (pendingWork.size) await Promise.allSettled([...pendingWork]);
     await db.close();
   };
 
   // Expose both adapter and raw better-sqlite3 database (for tests)
   const rawDb = db instanceof SqliteAdapter ? db.getRawDatabase() : db;
-  return { app, httpServer, io, db: rawDb, adapter: db, close };
+  return { app, httpServer, io, db: rawDb, adapter: db, close, runMaintenance: maintenance };
 }

@@ -25,15 +25,14 @@ try {
   };
   await register(main, 'syncprimary');
   const secondary = [];
-  await main.getByRole('button', { name: 'Test with another account', exact: true }).click();
+  await expect(main.getByRole('button', { name: 'Test with another account', exact: true })).toHaveCount(0);
   for (let index = 0; index < 3; index++) {
     const opened = instance.waitForEvent('window');
-    await main.getByRole('button', { name: 'Open isolated test client', exact: true }).click();
+    await main.evaluate(() => window.haven.openTestClient());
     const client = await opened;
     await register(client, `syncsecondary${index}`);
     secondary.push(client);
   }
-  await main.getByRole('button', { name: 'Close dialog', exact: true }).click();
   for (const page of [main, ...secondary]) {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('button', { name: 'desktop & gaming', exact: true }).click();

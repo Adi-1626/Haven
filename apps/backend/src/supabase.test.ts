@@ -8,6 +8,8 @@ import { SqliteAdapter } from './db/sqlite.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 test('SupabaseAuthVerifier caches verified tokens and syncs users into DatabaseAdapter', async () => {
   const verifier = new SupabaseAuthVerifier('https://example.supabase.co', 'dummy-key');
@@ -16,8 +18,6 @@ test('SupabaseAuthVerifier caches verified tokens and syncs users into DatabaseA
   const mockPayload = {
     id: 'user-supabase-123',
     email: 'test@haven.example',
-    username: 'haven_user',
-    displayName: 'Haven Tester',
   };
 
   (verifier as any).client = {
@@ -30,7 +30,7 @@ test('SupabaseAuthVerifier caches verified tokens and syncs users into DatabaseA
                 id: mockPayload.id,
                 email: mockPayload.email,
                 email_confirmed_at: new Date().toISOString(),
-                user_metadata: { username: mockPayload.username, display_name: mockPayload.displayName },
+                user_metadata: { username: 'haven_user', display_name: 'Haven Tester', profileCompleted: true },
               },
             },
             error: null,
@@ -50,8 +50,7 @@ test('SupabaseAuthVerifier caches verified tokens and syncs users into DatabaseA
   assert.ok(verified);
   assert.equal(verified.id, 'user-supabase-123');
   assert.equal(verified.email, 'test@haven.example');
-  assert.equal(verified.username, 'haven_user');
-  assert.equal(verified.displayName, 'Haven Tester');
+  assert.deepEqual(verified, { id: mockPayload.id, email: mockPayload.email });
 
   // Test expired token cache invalidation
   (verifier as any).tokenCache.set('expired-token', {
@@ -71,8 +70,9 @@ test('SupabaseAuthVerifier caches verified tokens and syncs users into DatabaseA
     const user = await db.getUser(verified.id);
     assert.ok(user);
     assert.equal(user.id, verified.id);
-    assert.equal(user.username, 'haven_user');
-    assert.equal(user.displayName, 'Haven Tester');
+    assert.match(user.username, /^user_[a-f0-9]{10}$/);
+    assert.equal(user.displayName, user.username);
+    assert.equal(JSON.parse(user.settings).profileCompleted, false);
     assert.equal(user.avatar, '');
 
     // Calling again does not overwrite existing profile if already present
@@ -158,7 +158,7 @@ test('createApp with SqliteAdapter never exposes hosted mode config even if supa
   try {
     const configRes = await fetch(`${base}/api/config`);
     const config = await configRes.json();
-    assert.equal(config.mode, undefined);
+    assert.equal(config.mode, 'local');
     assert.equal(config.supabaseUrl, undefined);
     assert.equal(config.supabaseAnonKey, undefined);
   } finally {
@@ -282,6 +282,16 @@ test('Hosted mode fail-fast prevents silent fallback to SQLite', async () => {
   }
 });
 
+test('explicit Local Mode refuses Hosted database and Supabase settings instead of switching databases', () => {
+  const entry = fileURLToPath(new URL('./index.ts', import.meta.url));
+  const result = spawnSync(process.execPath, ['--import', 'tsx', entry], {
+    env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, HAVEN_MODE: 'local', DATA_DIR: os.tmpdir(), PORT: '0', DATABASE_URL: 'postgresql://haven@example.invalid/haven', SUPABASE_URL: 'https://example.supabase.co' },
+    encoding: 'utf8', timeout: 30_000,
+  });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /Local Mode uses only its own SQLite data, but Hosted settings are present: DATABASE_URL, SUPABASE_URL/);
+});
+
 test('Authorization boundaries enforce cross-user, cross-server, DM, and blocked-user isolation', async () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'haven-boundary-test-'));
   const appInstance = createApp({ dataDir: tmpDir });
@@ -354,7 +364,7 @@ test('Authorization boundaries enforce cross-user, cross-server, DM, and blocked
   }
 });
 
-test('SupabaseAuthVerifier supports both displayName and display_name and allows invalidation', async () => {
+test('SupabaseAuthVerifier ignores editable identity metadata and allows invalidation', async () => {
   const verifier = new SupabaseAuthVerifier('https://example.supabase.co', 'dummy-key');
   
   (verifier as any).client = {
@@ -380,7 +390,7 @@ test('SupabaseAuthVerifier supports both displayName and display_name and allows
 
   const user = await verifier.verifyAccessToken('camel-case-token');
   assert.ok(user);
-  assert.equal(user.displayName, 'Pilot Camel');
+  assert.deepEqual(user, { id: 'user-camel-1', email: 'camel@haven.example' });
 
   // Verify caching and invalidation
   verifier.invalidateToken('camel-case-token');

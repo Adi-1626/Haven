@@ -40,6 +40,6 @@ async function startNativeHotkeys(userData, onEvent) {
   }).catch(error => { child.kill(); throw error; });
   child.stdin.on('error', () => {});
   child.on('exit', () => onEvent({ action: 'ptt', pressed: false, unavailable: true }));
-  return { configure: shortcut => { if (!child.killed && child.stdin.writable) child.stdin.write(shortcut?.keyCode ? `CONFIG ${shortcut.keyCode} ${shortcut.modifiers}\n` : 'STOP\n'); }, stop: () => { child.kill(); lines.close(); } };
+  return { simulateDeadHook: dead => { if (!child.killed && child.stdin.writable) child.stdin.write(`IGNORE ${dead ? 1 : 0}\n`); }, configure: shortcut => { if (!child.killed && child.stdin.writable) child.stdin.write(shortcut?.scanCode ? `CONFIG ${shortcut.scanCode} ${shortcut.extended ? 1 : 0} ${shortcut.modifiers}\n` : 'STOP\n'); }, stop: () => { child.kill(); lines.close(); } };
 }
 module.exports = { startNativeHotkeys };

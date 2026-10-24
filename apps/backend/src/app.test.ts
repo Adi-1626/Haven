@@ -107,6 +107,45 @@ test('membership, author rights, attachments and friend conversations enforce ac
 const connect = (base: string, cookie: string) => new Promise<Socket>((resolve, reject) => { const socket = socketClient(base, { extraHeaders: { Cookie: cookie }, transports: ['websocket'], reconnection: false }); socket.once('connect', () => resolve(socket)); socket.once('connect_error', reject); });
 const emit = (socket: Socket, name: string, payload: unknown = {}) => new Promise<any>((resolve, reject) => { socket.timeout(3000).emit(name, payload, (error: Error | null, value: unknown) => error ? reject(error) : resolve(value)); });
 
+test('stream subscriptions acknowledge protocol, reject stale/unauthorized watches and serialize cancellation', async () => {
+  const context = await fixture(); const sockets: Socket[] = [];
+  try {
+    const owner = await context.register('stream-owner'), viewer = await context.register('stream-viewer'), outsider = await context.register('stream-outsider');
+    const community = await context.request('/servers', 'POST', { name: 'Stream room' }, owner.cookie);
+    const serverId = community.data.server.id;
+    const invite = await context.request(`/servers/${serverId}/invites`, 'POST', {}, owner.cookie);
+    await context.request(`/invites/${invite.data.code}/join`, 'POST', {}, viewer.cookie);
+    const boot = await context.request('/bootstrap', 'GET', undefined, owner.cookie);
+    const channelId = boot.data.channels.find((c: any) => c.type === 'voice').id;
+    const a = await connect(context.base, owner.cookie), b = await connect(context.base, viewer.cookie), c = await connect(context.base, outsider.cookie);
+    sockets.push(a, b, c);
+    const joined = await emit(a, 'voice:join', { channelId, streamProtocol: 1 });
+    assert.equal(joined.capabilities.streamSubscriptions, 1);
+    await emit(b, 'voice:join', { channelId, streamProtocol: 1 });
+    const broadcastId = '00000000-0000-4000-8000-000000000001';
+    await emit(a, 'voice:state', { muted: false, deafened: false, sharing: true, broadcastId });
+    assert.match((await emit(c, 'voice:stream-watch', { target: a.id, broadcastId })).error, /permission/i);
+    assert.match((await emit(b, 'voice:stream-watch', { target: a.id, broadcastId: '00000000-0000-4000-8000-000000000002' })).error, /ended/i);
+    const watched = new Promise<any>(resolve => a.once('voice:stream-watch', resolve));
+    assert.deepEqual(await emit(b, 'voice:stream-watch', { target: a.id, broadcastId }), { protocol: 1, broadcastId });
+    assert.deepEqual(await watched, { viewerSocketId: b.id, broadcastId });
+    const cancelled = new Promise<any>(resolve => a.once('voice:stream-unwatch', resolve));
+    // Packet order must win even though authorization uses asynchronous database calls.
+    await Promise.all([
+      emit(b, 'voice:stream-watch', { target: a.id, broadcastId }),
+      emit(b, 'voice:stream-unwatch', { target: a.id, broadcastId }),
+    ]);
+    assert.deepEqual(await cancelled, { viewerSocketId: b.id, broadcastId });
+    await emit(b, 'voice:stream-watch', { target: a.id, broadcastId });
+    const onLeave = new Promise<any>(resolve => a.once('voice:stream-unwatch', resolve));
+    await emit(b, 'voice:leave');
+    assert.equal((await onLeave).broadcastId, broadcastId);
+    await emit(a, 'voice:state', { muted: false, deafened: false, sharing: false });
+    await emit(b, 'voice:join', { channelId, streamProtocol: 1 });
+    assert.match((await emit(b, 'voice:stream-watch', { target: a.id, broadcastId })).error, /ended/i);
+  } finally { sockets.forEach(socket => socket.disconnect()); await context.close(); }
+});
+
 test('socket voice signaling and kick revocation stay inside authorized rooms', async () => {
   const context = await fixture(); const sockets: Socket[] = [];
   try {

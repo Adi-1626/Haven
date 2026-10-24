@@ -1,0 +1,612 @@
+/* ==========================================================================
+   Zenith Minimal — Server Onboarding Dialogs
+   1. Make a space of your own (Create Server)
+   2. Find your people (Join Server / Invitation Redemption)
+   ========================================================================== */
+
+/* Modal Frame Overrides */
+dialog.modal.zenith-create-server-modal,
+dialog.modal.zenith-join-server-modal {
+  width: 480px !important;
+  max-width: min(480px, calc(100vw - 24px)) !important;
+  max-height: min(740px, calc(100vh - 32px)) !important;
+  background: #151821 !important;
+  border: 1px solid rgba(70, 69, 84, 0.45) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  color: #e1e2ec !important;
+}
+
+dialog.modal.zenith-create-server-modal > header,
+dialog.modal.zenith-join-server-modal > header {
+  display: none !important;
+}
+
+/* Modal Inner Card */
+.zenith-onboarding-card {
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  background: #151821;
+  color: #e1e2ec;
+  font-family: var(--font-body, 'Inter', -apple-system, sans-serif);
+  box-sizing: border-box;
+  max-height: min(740px, calc(100vh - 32px));
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2b3240 transparent;
+}
+
+/* Header */
+.zenith-onboarding-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.zenith-onboarding-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.zenith-onboarding-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zenith-onboarding-icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.zenith-onboarding-icon-badge.create {
+  background: rgba(192, 193, 255, 0.1);
+  border: 1px solid rgba(192, 193, 255, 0.25);
+  color: #c0c1ff;
+}
+
+.zenith-onboarding-icon-badge.join {
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  color: #34d399;
+}
+
+.zenith-onboarding-title {
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #e1e2ec;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.zenith-onboarding-subtitle {
+  font-size: 13px;
+  color: #a7aab7;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.zenith-onboarding-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #8a8fa3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.zenith-onboarding-close-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+/* Form Groups */
+.zenith-onboarding-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.zenith-onboarding-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.zenith-onboarding-field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.zenith-onboarding-label {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c0c1ff;
+  margin: 0;
+}
+
+.zenith-onboarding-label.join {
+  color: #34d399;
+}
+
+.zenith-onboarding-counter {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: #7b8094;
+}
+
+/* Server Rail Icon Preview Box */
+.zenith-server-preview-box {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  background: #101319;
+  border: 1px solid rgba(70, 69, 84, 0.35);
+  border-radius: 10px;
+}
+
+.zenith-server-rail-icon-mock {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: #272a35;
+  color: #d2d9ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 20px;
+  font-weight: 700;
+  position: relative;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.zenith-server-rail-icon-mock.has-emoji {
+  font-size: 26px;
+}
+
+.zenith-server-rail-indicator {
+  position: absolute;
+  left: -8px;
+  width: 4px;
+  height: 24px;
+  border-radius: 3px;
+  background: #c0c1ff;
+}
+
+.zenith-server-preview-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.zenith-server-preview-name {
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 15px;
+  font-weight: 700;
+  color: #e1e2ec;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zenith-server-preview-hint {
+  font-size: 12px;
+  color: #8a8fa3;
+}
+
+/* Quick Emoji Picker Chips */
+.zenith-emoji-quick-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.zenith-emoji-chip {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: #101319;
+  border: 1px solid rgba(70, 69, 84, 0.4);
+  font-size: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  padding: 0;
+}
+
+.zenith-emoji-chip:hover {
+  background: #272a35;
+  border-color: rgba(192, 193, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.zenith-emoji-chip.active {
+  background: rgba(192, 193, 255, 0.15);
+  border-color: #c0c1ff;
+  box-shadow: 0 0 10px rgba(192, 193, 255, 0.2);
+}
+
+.zenith-emoji-clear-btn {
+  font-family: var(--font-body, 'Inter', sans-serif);
+  font-size: 11px;
+  color: #8a8fa3;
+  background: transparent;
+  border: 1px solid rgba(70, 69, 84, 0.4);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.zenith-emoji-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #e1e2ec;
+  border-color: #8a8fa3;
+}
+
+/* Input Wrappers */
+.zenith-onboarding-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.zenith-onboarding-input {
+  width: 100%;
+  background: #0b0e14 !important;
+  border: 1px solid #2b3240 !important;
+  border-radius: 8px !important;
+  padding: 11px 14px !important;
+  font-size: 14px !important;
+  color: #e1e2ec !important;
+  font-family: var(--font-body, 'Inter', sans-serif);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.zenith-onboarding-input:focus {
+  outline: none !important;
+  border-color: #c0c1ff !important;
+  box-shadow: 0 0 0 2px rgba(192, 193, 255, 0.15) !important;
+}
+
+.zenith-onboarding-input.join:focus {
+  border-color: #34d399 !important;
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.15) !important;
+}
+
+.zenith-onboarding-input-clear {
+  position: absolute;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: #7b8094;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.zenith-onboarding-input-clear:hover {
+  color: #e1e2ec;
+}
+
+.zenith-onboarding-help {
+  font-size: 11px;
+  color: #8a8fa3;
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* Verified Invite Preview Card (Join Server) */
+.zenith-invite-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: #101319;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-radius: 10px;
+  margin-top: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.zenith-invite-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.zenith-invite-community-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #272a35;
+  color: #d2d9ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 18px;
+  font-weight: 700;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.zenith-invite-community-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.zenith-invite-community-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.zenith-invite-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zenith-invite-verified-badge {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  border-radius: 4px;
+  padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.zenith-invite-community-name {
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 16px;
+  font-weight: 700;
+  color: #e1e2ec;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zenith-invite-expiry-text {
+  font-size: 12px;
+  color: #8a8fa3;
+}
+
+/* Switcher Links */
+.zenith-onboarding-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: none;
+  color: #c0c1ff;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-top: 4px;
+  align-self: flex-start;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.zenith-onboarding-switch-btn:hover {
+  color: #d5d6ff;
+  text-decoration: underline;
+}
+
+.zenith-onboarding-switch-btn.join {
+  color: #34d399;
+}
+
+.zenith-onboarding-switch-btn.join:hover {
+  color: #6ee7b7;
+}
+
+/* Error Alert Box */
+.zenith-onboarding-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Footer Actions */
+.zenith-onboarding-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.zenith-btn-secondary {
+  background: transparent;
+  border: 1px solid rgba(70, 69, 84, 0.6);
+  color: #e1e2ec;
+  font-family: var(--font-body, 'Inter', sans-serif);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.zenith-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: #8a8fa3;
+}
+
+.zenith-btn-primary {
+  background: #c0c1ff;
+  color: #14008b;
+  border: none;
+  font-family: var(--font-body, 'Inter', sans-serif);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 14px rgba(192, 193, 255, 0.15);
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.zenith-btn-primary:hover:not(:disabled) {
+  background: #d5d6ff;
+  transform: translateY(-1px);
+}
+
+.zenith-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.zenith-btn-primary.join {
+  background: #34d399;
+  color: #064e3b;
+  box-shadow: 0 4px 14px rgba(52, 211, 153, 0.2);
+}
+
+.zenith-btn-primary.join:hover:not(:disabled) {
+  background: #6ee7b7;
+}
+
+/* Responsive Scaling for compact and minimal viewports */
+@media (max-width: 600px), (max-height: 640px) {
+  dialog.modal.zenith-create-server-modal,
+  dialog.modal.zenith-join-server-modal {
+    width: calc(100vw - 20px) !important;
+    max-width: 100vw !important;
+    max-height: calc(100dvh - 16px) !important;
+    border-radius: 12px !important;
+  }
+
+  .zenith-onboarding-card {
+    padding: 16px 18px;
+    max-height: calc(100dvh - 16px);
+  }
+
+  .zenith-onboarding-header {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+  }
+
+  .zenith-onboarding-title {
+    font-size: 17px;
+  }
+
+  .zenith-onboarding-subtitle {
+    font-size: 12px;
+  }
+
+  .zenith-server-rail-preview-card {
+    padding: 8px 10px;
+    margin-bottom: 0px;
+  }
+
+  .zenith-server-rail-icon-mock {
+    width: 38px;
+    height: 38px;
+    font-size: 18px;
+  }
+
+  .zenith-onboarding-form {
+    gap: 12px;
+  }
+
+  .zenith-onboarding-field {
+    gap: 5px;
+  }
+
+  .zenith-emoji-chip {
+    width: 30px;
+    height: 30px;
+    font-size: 15px;
+  }
+
+  .zenith-emoji-clear-btn {
+    height: 30px;
+    font-size: 10px;
+  }
+
+  .zenith-onboarding-actions {
+    margin-top: 4px;
+    padding-top: 12px;
+    flex-direction: row;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .zenith-btn-secondary,
+  .zenith-btn-primary {
+    padding: 7px 15px;
+    font-size: 12px;
+  }
+}

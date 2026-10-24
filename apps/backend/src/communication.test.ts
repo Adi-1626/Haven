@@ -129,7 +129,7 @@ test('public invite previews protect membership, authenticate redemption, enforc
   try {
     const owner = await context.register('invite-owner'); const guest = await context.register('invite-guest');
     const community = await context.request('/servers', 'POST', { name: 'Invitation community', icon: '🌿' }, owner.cookie); const serverId = community.data.server.id;
-    assert.deepEqual((await context.request('/config')).data, { publicUrl: 'https://haven.example' });
+    assert.deepEqual((await context.request('/config')).data, { publicUrl: 'https://haven.example', capabilities: { streamSubscriptions: 1 }, mode: 'local' });
     assert.equal((await context.request(`/servers/${serverId}/invites`, 'POST', {}, guest.cookie)).status, 403);
     const invite = await context.request(`/servers/${serverId}/invites`, 'POST', {}, owner.cookie);
     assert.equal(invite.status, 201); assert.ok(invite.data.expiresAt > Date.now() + 6 * 86400_000);
@@ -219,7 +219,7 @@ test('legacy databases migrate invitation expiry additively and keep legacy code
     const cookie = guest.headers.get('set-cookie')!.split(';')[0];
     const redeemed = await fetch(`${base}/api/invites/legacy-code/join`, { method: 'POST', headers: { Cookie: cookie } });
     assert.equal(redeemed.status, 200); assert.deepEqual(await redeemed.json(), { serverId: 'legacy-server' });
-    assert.deepEqual(await (await fetch(`${base}/api/config`)).json(), {});
+    assert.deepEqual(await (await fetch(`${base}/api/config`)).json(), { capabilities: { streamSubscriptions: 1 }, mode: 'local' });
     assert.throws(() => createApp({ dataDir: directory, publicUrl: 'http://192.168.1.10:3001' }), /HTTPS/);
     assert.throws(() => createApp({ dataDir: directory, publicUrl: 'https://user:secret@haven.example' }), /HTTPS/);
   } finally { await instance.close(); rmSync(directory, { recursive: true, force: true }); }

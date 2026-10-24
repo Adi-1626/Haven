@@ -2,6 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fetchAuthConfig, initSupabase, getSupabase, isHostedAuth, resetAuthClientForTesting } from './supabase.js';
 
+test('startup HTML never resolves as Local Mode; failed discovery can retry into Hosted Mode', async () => {
+  const originalFetch = globalThis.fetch;
+  resetAuthClientForTesting();
+  let requests = 0;
+  globalThis.fetch = async () => { requests++; return new Response('<title>Starting your app - Voroa</title>', { headers: { 'content-type': 'text/html' } }); };
+  try {
+    await assert.rejects(initSupabase(), /temporarily unavailable/);
+    assert.equal(requests, 3);
+    assert.equal(getSupabase(), null);
+    globalThis.fetch = async () => Response.json({ mode: 'hosted', supabaseUrl: 'https://retry-test.supabase.co', supabaseAnonKey: 'test-publishable-key' });
+    assert.ok(await initSupabase());
+    assert.equal(isHostedAuth(), true);
+  } finally { globalThis.fetch = originalFetch; resetAuthClientForTesting(); }
+});
+
 test('fetchAuthConfig and initSupabase correctly default to local mode when /api/config returns no hosted config', async () => {
   resetAuthClientForTesting();
 
@@ -11,7 +26,7 @@ test('fetchAuthConfig and initSupabase correctly default to local mode when /api
     const url = String(input);
     if (url.includes('/api/config')) {
       return {
-        ok: true,
+        ok: true, headers: new Headers({'content-type': 'application/json'}),
         json: async () => ({ publicUrl: 'http://localhost:5173' }),
       } as Response;
     }
@@ -41,7 +56,7 @@ test('initSupabase initializes Supabase client when /api/config provides hosted 
     const url = String(input);
     if (url.includes('/api/config')) {
       return {
-        ok: true,
+        ok: true, headers: new Headers({'content-type': 'application/json'}),
         json: async () => ({
           mode: 'hosted',
           supabaseUrl: 'https://tswmpzeckmquvrlzvtsy.supabase.co',
@@ -97,7 +112,7 @@ test('Supabase client includes updateUser method for password recovery', async (
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => ({
-    ok: true,
+    ok: true, headers: new Headers({'content-type': 'application/json'}),
     json: async () => ({
       mode: 'hosted',
       supabaseUrl: 'https://tswmpzeckmquvrlzvtsy.supabase.co',

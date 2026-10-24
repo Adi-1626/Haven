@@ -16,6 +16,7 @@ export type DesktopShortcut = { action: 'ptt'; pressed: boolean } | { action: 'm
 declare global {
   interface Window {
     haven?: {
+      getApiOrigin?: () => string | null;
       connectServer: (address: string) => Promise<void>;
       getConnection: () => Promise<{ url: string; local: boolean }>;
       openBrowserClient: () => Promise<void>;

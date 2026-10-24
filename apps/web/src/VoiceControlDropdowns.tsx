@@ -13,6 +13,8 @@ import {
   VolumeX,
 } from 'lucide-react';
 import type { useMedia } from './media';
+import { useInputMeter, type InputMeter } from './input-meter';
+import { ToggleSwitch } from './ToggleSwitch';
 
 interface VoiceControlsProps {
   media: ReturnType<typeof useMedia>;
@@ -49,6 +51,17 @@ export function VoiceInputMeter({ level }: { level: number }) {
   );
 }
 
+function LiveInputLevel({ meter }: { meter: InputMeter }) {
+  const level = useInputMeter(meter);
+  return <div className="popover-section">
+    <div className="popover-slider-header">
+      <span className="popover-section-label">INPUT LEVEL</span>
+      <span className="popover-value-display">{level > 0.05 ? `${Math.round(level * 100)}%` : 'Listening'}</span>
+    </div>
+    <VoiceInputMeter level={level} />
+  </div>;
+}
+
 export function VoiceControls({ media, onOpenSettings }: VoiceControlsProps) {
   const [micOpen, setMicOpen] = useState(false);
   const [headphoneOpen, setHeadphoneOpen] = useState(false);
@@ -63,9 +76,8 @@ export function VoiceControls({ media, onOpenSettings }: VoiceControlsProps) {
   useEffect(() => {
     if (micOpen) {
       void media.startInputMonitor();
-    } else {
-      media.stopInputMonitor();
-    }
+    } else media.stopInputMonitor();
+    return media.stopInputMonitor;
   }, [micOpen, media.startInputMonitor, media.stopInputMonitor]);
 
   // Click-outside dismissal
@@ -165,7 +177,7 @@ export function VoiceControls({ media, onOpenSettings }: VoiceControlsProps) {
             setHeadphoneOpen(false);
           }}
         >
-          {micOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+          {micOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
         </button>
       </div>
 
@@ -175,7 +187,7 @@ export function VoiceControls({ media, onOpenSettings }: VoiceControlsProps) {
           type="button"
           className={`voice-action-btn ${media.deafened ? 'danger-text is-deafened' : ''}`}
           title={media.deafened ? 'Undeafen' : 'Deafen'}
-          aria-label={media.deafened ? 'Undeafen headphones' : 'Deafen headphones'}
+          aria-label={media.deafened ? 'Undeafen audio' : 'Deafen audio'}
           onClick={media.toggleDeafen}
         >
           {media.deafened ? <HeadphoneOff size={16} /> : <Headphones size={16} />}
@@ -193,7 +205,7 @@ export function VoiceControls({ media, onOpenSettings }: VoiceControlsProps) {
             setMicOpen(false);
           }}
         >
-          {headphoneOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+          {headphoneOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
         </button>
       </div>
 
@@ -261,34 +273,31 @@ export function VoiceControls({ media, onOpenSettings }: VoiceControlsProps) {
             </div>
 
             {/* Live Input Level Meter */}
-            <div className="popover-section">
-              <div className="popover-slider-header">
-                <span className="popover-section-label">INPUT LEVEL</span>
-                <span className="popover-value-display">
-                  {media.inputLevel > 0.05 ? `${Math.round(media.inputLevel * 100)}%` : 'Listening'}
-                </span>
-              </div>
-              <VoiceInputMeter level={media.inputLevel} />
-            </div>
+            <LiveInputLevel meter={media.inputMeter} />
 
             {/* Input Mode: Voice Activity / Push to Talk */}
             <div className="popover-section">
               <span className="popover-section-label">INPUT MODE</span>
-              <div className="popover-toggle-row">
-                <label className="popover-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={media.settings.pushToTalk}
-                    onChange={e => media.setSettings({ pushToTalk: e.target.checked })}
-                  />
-                  <span>Push to Talk</span>
-                </label>
-                {media.settings.pushToTalk && (
-                  <kbd className="popover-ptt-key">
-                    {media.settings.pushToTalkKey || 'Ctrl+Shift+Space'}
-                  </kbd>
-                )}
-              </div>
+              <label className="popover-setting-row">
+                <div className="popover-setting-text">
+                  <div className="popover-setting-title-row">
+                    <span className="popover-setting-title">Push to Talk</span>
+                    {media.settings.pushToTalk && (
+                      <kbd className="popover-ptt-key">
+                        {media.settings.pushToTalkKey || 'Ctrl+Shift+Space'}
+                      </kbd>
+                    )}
+                  </div>
+                  <span className="popover-setting-description">
+                    {media.settings.pushToTalk ? 'Hold key to transmit voice' : 'Voice activity detection'}
+                  </span>
+                </div>
+                <ToggleSwitch
+                  aria-label="Push to Talk"
+                  checked={media.settings.pushToTalk}
+                  onChange={e => media.setSettings({ pushToTalk: e.target.checked })}
+                />
+              </label>
             </div>
 
             {/* Noise Suppression */}
@@ -432,13 +441,16 @@ export function VoiceControls({ media, onOpenSettings }: VoiceControlsProps) {
             {/* Deafen toggle */}
             <div className="popover-section">
               <span className="popover-section-label">DEAFEN STATUS</span>
-              <label className="popover-checkbox-label">
-                <input
-                  type="checkbox"
+              <label className="popover-setting-row">
+                <div className="popover-setting-text">
+                  <span className="popover-setting-title">Deafen incoming audio</span>
+                  <span className="popover-setting-description">Deafen all incoming voice &amp; sounds</span>
+                </div>
+                <ToggleSwitch
+                  aria-label="Deafen all incoming voice & sounds"
                   checked={media.deafened}
                   onChange={media.toggleDeafen}
                 />
-                <span>Deafen all incoming voice & sounds</span>
               </label>
             </div>
           </div>

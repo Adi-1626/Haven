@@ -18,6 +18,7 @@ test('animated messages and reactions respect persisted motion, gaming and notif
     } });
   });
   await page.goto('/');
+  await page.getByRole('button', { name: 'Join Haven', exact: true }).click();
   await page.getByLabel('DISPLAY NAME', { exact: true }).fill(username);
   await page.getByLabel('USERNAME', { exact: true }).fill(username);
   await page.getByLabel('PASSWORD', { exact: true }).fill('Haven-Emoji-2026');
@@ -47,9 +48,9 @@ test('animated messages and reactions respect persisted motion, gaming and notif
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await expect(wave).toHaveClass(/is-animated/);
   await settings(page);
-  await page.getByRole('checkbox', { name: /^Animate emoji/ }).uncheck();
+  await page.getByRole('switch', { name: /^Animate emoji/ }).uncheck();
   await page.getByRole('button', { name: 'notifications', exact: true }).click();
-  await page.getByRole('checkbox', { name: /^Desktop notifications/ }).uncheck();
+  await page.getByRole('switch', { name: /^Desktop notifications/ }).uncheck();
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
   await expect(wave).not.toHaveClass(/is-animated/);
   await page.reload();
@@ -57,18 +58,18 @@ test('animated messages and reactions respect persisted motion, gaming and notif
   await expect(wave).not.toHaveClass(/is-animated/);
   await expect(heart).not.toHaveClass(/is-animated/);
   await settings(page);
-  await expect(page.getByRole('checkbox', { name: /^Animate emoji/ })).not.toBeChecked();
-  await page.getByRole('checkbox', { name: /^Animate emoji/ }).check();
-  await page.getByRole('checkbox', { name: /^Low-resource gaming mode/ }).check();
+  await expect(page.getByRole('switch', { name: /^Animate emoji/ })).not.toBeChecked();
+  await page.getByRole('switch', { name: /^Animate emoji/ }).check();
+  await page.getByRole('switch', { name: /^Low-resource gaming mode/ }).check();
   await expect(page.getByText('Global shortcuts, tray and startup controls require Haven Desktop.', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
   await expect(wave).not.toHaveClass(/is-animated/);
   await page.reload();
   await settings(page);
-  await expect(page.getByRole('checkbox', { name: /^Low-resource gaming mode/ })).toBeChecked();
-  await page.getByRole('checkbox', { name: /^Low-resource gaming mode/ }).uncheck();
+  await expect(page.getByRole('switch', { name: /^Low-resource gaming mode/ })).toBeChecked();
+  await page.getByRole('switch', { name: /^Low-resource gaming mode/ }).uncheck();
   await page.getByRole('button', { name: 'notifications', exact: true }).click();
-  await expect(page.getByRole('checkbox', { name: /^Desktop notifications/ })).not.toBeChecked();
+  await expect(page.getByRole('switch', { name: /^Desktop notifications/ })).not.toBeChecked();
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
   await expect(wave).toHaveClass(/is-animated/);
   await expect(heart).toHaveClass(/is-animated/);
@@ -99,7 +100,7 @@ test('animated messages and reactions respect persisted motion, gaming and notif
     });
     await settings(page);
     await page.getByRole('button', { name: 'notifications', exact: true }).click();
-    await page.getByRole('checkbox', { name: /^Desktop notifications/ }).check();
+    await page.getByRole('switch', { name: /^Desktop notifications/ }).check();
     await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
     await page.evaluate(() => {
       (window as unknown as { __havenHidden: boolean }).__havenHidden = true;

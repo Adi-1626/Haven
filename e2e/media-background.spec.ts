@@ -104,8 +104,9 @@ test('cancelling capture preserves voice, socket reconnect preserves active capt
   expect(await page.evaluate(() => (window as unknown as { mediaHarness: MediaHarness }).mediaHarness.microphones[0].active)).toBe(true);
   await page.evaluate(() => { (window as unknown as { mediaHarness: MediaHarness }).mediaHarness.cancelCapture = false; });
   await page.getByRole('button', { name: 'Share screen', exact: true }).first().click();
-  await expect(page.getByRole('button', { name: 'Stop sharing', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Stop sharing', exact: true }).first()).toBeVisible();
   const channelId = (await (await page.request.get('/api/bootstrap')).json()).voice[0].channelId;
+  await guest.getByRole('button', { name: 'Watch Stream', exact: true }).click();
   await expect.poll(() => guest.locator('video').evaluateAll(videos => videos.some(video => (video as HTMLVideoElement).videoWidth > 0))).toBe(true);
   const previousConnections = await page.evaluate(() => (window as unknown as { mediaHarness: MediaHarness }).mediaHarness.connections.length);
   await expect.poll(() => page.evaluate(() => (window as unknown as { mediaHarness: MediaHarness }).mediaHarness.sockets.some(socket => socket.readyState === WebSocket.OPEN))).toBe(true);
@@ -170,7 +171,7 @@ test('browser push-to-talk applies combinations, rejects conflicts and gaming mo
   await setup(page, 'shortcuts');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'voice & video', exact: true }).click();
-  await page.getByRole('checkbox', { name: /^Push to talk/ }).check();
+  await page.getByRole('switch', { name: /^Push to talk/ }).check();
   await page.getByRole('button', { name: 'desktop & gaming', exact: true }).click();
   const transmitting = () => page.evaluate(() => (window as unknown as { mediaHarness: MediaHarness }).mediaHarness.microphones.filter(stream => stream.active).some(stream => stream.getAudioTracks().some(track => track.enabled)));
   const recorder = page.getByRole('button', { name: 'Push-to-talk shortcut', exact: true });
@@ -190,7 +191,7 @@ test('browser push-to-talk applies combinations, rejects conflicts and gaming mo
   await expect(recorder).toContainText('Control+Shift+V');
   await page.getByRole('button', { name: 'Apply shortcut', exact: true }).click();
   await expect(page.getByText('Push-to-talk shortcut applied', { exact: true })).toBeVisible();
-  await page.getByRole('checkbox', { name: 'Low-resource gaming mode', exact: true }).check();
+  await page.getByRole('switch', { name: 'Low-resource gaming mode', exact: true }).check();
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
   expect(await transmitting()).toBe(false);
   await page.keyboard.down('Control'); await page.keyboard.down('Shift'); await page.keyboard.down('V');

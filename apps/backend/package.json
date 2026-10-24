@@ -8,19 +8,19 @@
     "build": "tsc",
     "start": "node build/index.js",
     "dev": "tsx watch src/index.ts",
-    "dev:hosted": "tsx watch src/index.ts --hosted",
+    "dev:hosted": "node ../../scripts/hosted-target-guard.mjs -- tsx watch src/index.ts --hosted",
     "check": "tsc --noEmit",
     "test": "tsx --test src/*.test.ts",
     "package": "node scripts/package-production.mjs"
   },
   "dependencies": {
     "@haven/shared": "*",
-    "@supabase/supabase-js": "^2.49.1",
+    "@supabase/supabase-js": "2.50.0",
     "@types/pg": "^8.11.11",
     "better-sqlite3": "^12.4.1",
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
-    "multer": "^2.0.2",
+    "multer": "2.5.0",
     "pg": "^8.13.3",
     "socket.io": "^4.8.1",
     "zod": "^4.1.12"

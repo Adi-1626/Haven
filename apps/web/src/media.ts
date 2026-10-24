@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
-import { resolveApiUrl } from './api';
+import { api, fetchResource } from './api';
 import { bitrateBits, captureDimensions, qualityForSource, senderScale, shareOptionsFor } from './media-quality';
 import type { ShareFps, ShareHeight } from './media-quality';
 import { createMicrophonePipeline, normalizeAudioSettings, microphoneCaptureConstraints, type SuppressionStatus } from './audio-pipeline';
@@ -9,9 +9,13 @@ import { adaptCongestion, defaultRuntimePreferences, effectiveSharePreferences, 
 import { subscribeConnectionReports } from './connection-stats';
 import { useAppActivity } from './app-activity';
 import { readMediaPreference, saveMediaPreference } from './media-persistence';
-import { normalizeLocalShortcut } from './shortcuts';
+import { normalizeLocalShortcut, shortcutTypesText } from './shortcuts';
 import { restoreAudioDevices } from './media-devices';
-
+import { createInputMonitor } from './input-monitor';
+import { createInputMeter } from './input-meter';
+import { createScreenTransport } from './screen-transport';
+import { soundboardService } from './soundboard-service';
+import type { User } from '@haven/shared/types';
 export interface MediaUser {
   id: string;
   name?: string;
@@ -22,15 +26,17 @@ export interface MediaUser {
   status?: string;
 }
 
-export interface VoiceState { muted: boolean; deafened: boolean; sharing: boolean; speaking?: boolean; serverMuted?: boolean; serverDeafened?: boolean }
+export interface VoiceState { muted: boolean; deafened: boolean; sharing: boolean; speaking?: boolean; serverMuted?: boolean; serverDeafened?: boolean; streamProtocol?: number; broadcastId?: string }
 export interface MediaPeer {
   socketId: string;
   user: MediaUser;
   stream: MediaStream | null;
   state: VoiceState;
   volume: number;
+  streamVolume?: number;
   localMuted?: boolean;
   connectionState?: RTCPeerConnectionState;
+  connectionError?: string;
 }
 export interface MediaSettings extends RuntimePreferences {
   inputDevice: string;
@@ -46,6 +52,8 @@ export interface MediaSettings extends RuntimePreferences {
   inputSensitivity: number;
   pushToTalkKey: string;
   gamingMode: boolean;
+  soundboardVolume: number;
+  soundboardMuted: boolean;
 }
 export interface VideoStatistics {
   socketId: string;
@@ -75,6 +83,12 @@ interface PeerConnection {
   answering: boolean;
   candidates: RTCIceCandidateInit[];
   screenSenders: RTCRtpSender[];
+  screenTransport?: ReturnType<typeof createScreenTransport>;
+  screenCapable: boolean;
+  voiceTransceiver?: RTCRtpTransceiver;
+  screenAudioTracks: Set<string>;
+  watchTimer?: ReturnType<typeof setTimeout>;
+  receivedBroadcastId?: string;
   offerOnInitialNegotiation: boolean;
   signalQueue: Promise<void>;
   videoTracks: Map<string, MediaStreamTrack>;
@@ -93,6 +107,7 @@ const initialSettings: MediaSettings = {
   inputDevice: '', outputDevice: '', inputDeviceLabel: '', outputDeviceLabel: '', noiseSuppression: true, noiseSuppressionMode: 'standard', echoCancellation: true, pushToTalk: false,
   inputVolume: 1, outputVolume: 1, inputSensitivity: -45,
   pushToTalkKey: 'Control+Shift+Space', gamingMode: false,
+  soundboardVolume: 1, soundboardMuted: false,
 };
 const initialQuality: ShareQuality = {
   nativeWidth: 0, nativeHeight: 0, width: 0, height: 0, fps: 60, bitrateMbps: 8,
@@ -108,7 +123,7 @@ function readSettings(): { settings: MediaSettings; error: string | null } {
     for (const [key, value] of Object.entries(values)) {
       if (!Object.hasOwn(initialSettings, key) || (key !== 'shareHeight' && typeof value !== typeof initialSettings[key as keyof MediaSettings])) throw new Error(`Invalid saved media setting: ${key}`);
     }
-    for (const [key, min, max] of [['inputVolume', 0, 2], ['outputVolume', 0, 1], ['inputSensitivity', -60, -10], ['voiceBitrateKbps', 24, 64], ['shareBitrateMbps', 1, 50]] as const) {
+    for (const [key, min, max] of [['inputVolume', 0, 2], ['outputVolume', 0, 1], ['soundboardVolume', 0, 1], ['inputSensitivity', -60, -10], ['voiceBitrateKbps', 24, 64], ['shareBitrateMbps', 1, 50]] as const) {
       if (key in values && !(typeof values[key] === 'number' && Number.isFinite(values[key]) && values[key] >= min && values[key] <= max)) throw new Error(`Invalid saved media setting: ${key}`);
     }
     if ('pushToTalkKey' in values) normalizeLocalShortcut(values.pushToTalkKey as string);
@@ -117,8 +132,8 @@ function readSettings(): { settings: MediaSettings; error: string | null } {
     if ('shareHeight' in values && values.shareHeight !== 'native' && !(typeof values.shareHeight === 'number' && Number.isInteger(values.shareHeight) && values.shareHeight > 0 && values.shareHeight <= 8640)) throw new Error('Invalid share height');
     if (values.noiseSuppressionMode === 'enhanced') next.noiseSuppressionMode = 'enhanced';
     for (const key of ['inputDevice', 'outputDevice', 'inputDeviceLabel', 'outputDeviceLabel', 'pushToTalkKey'] as const) if (typeof values[key] === 'string') next[key] = values[key];
-    for (const key of ['noiseSuppression', 'echoCancellation', 'pushToTalk', 'gamingMode'] as const) if (typeof values[key] === 'boolean') next[key] = values[key];
-    for (const key of ['inputVolume', 'outputVolume', 'inputSensitivity'] as const) if (typeof values[key] === 'number') next[key] = values[key];
+    for (const key of ['noiseSuppression', 'echoCancellation', 'pushToTalk', 'gamingMode', 'soundboardMuted'] as const) if (typeof values[key] === 'boolean') next[key] = values[key];
+    for (const key of ['inputVolume', 'outputVolume', 'soundboardVolume', 'inputSensitivity'] as const) if (typeof values[key] === 'number') next[key] = values[key];
     Object.assign(next, normalizeAudioSettings(next));
     Object.assign(next, normalizeRuntimePreferences(values));
     return { settings: next, error: null };
@@ -133,7 +148,9 @@ function readVoiceState(): VoiceState & { persistenceError?: string } {
   } catch (error) { return { muted: true, deafened: true, sharing: false, persistenceError: `Could not restore mute/deafen settings. Microphone is blocked: ${error instanceof Error ? error.message : error}` }; }
 }
 
-export function useMedia(socket: Socket | null, currentUserId: string, reportError: (message: string) => void) {
+export function useMedia(socket: Socket | null, currentUserId: string, reportError: (message: string) => void, currentUser?: User | null) {
+  const accountRef = useRef(currentUser);
+  accountRef.current = currentUser;
   const [initialVoice] = useState(readVoiceState);
   const [voiceChannelId, setVoiceChannelId] = useState<string | null>(null);
   const [peers, setPeers] = useState<MediaPeer[]>([]);
@@ -152,8 +169,8 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   const [persistenceError, setPersistenceError] = useState<string | null>(loadedSettings.error || initialVoice.persistenceError || null);
   const persistenceBlocked = useRef(Boolean(loadedSettings.error || initialVoice.persistenceError));
   const settingsEdited = useRef(false);
-  const [inputLevel, setInputLevel] = useState(0);
-  const inputMonitorRef = useRef<{ stream: MediaStream; context: AudioContext; pipeline: ReturnType<typeof createMicrophonePipeline> } | null>(null);
+  const [inputMeter] = useState(createInputMeter);
+  const inputMonitorRef = useRef<ReturnType<typeof createInputMonitor> | null>(null);
   const lastInputSampleTime = useRef(0);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceError, setDeviceError] = useState<string | null>(null);
@@ -171,6 +188,14 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   const pendingSignals = useRef(new Map<string, Signal[]>());
   const microphone = useRef<MediaStream | null>(null);
   const screen = useRef<MediaStream | null>(null);
+  const streamSubscribers = useRef<Set<string>>(new Set());
+  const activeWatchedStreams = useRef<Set<string>>(new Set());
+  const [watchingStreams, setWatchingStreams] = useState<string[]>([]);
+  // Broadcast IDs survive a transport reconnect, but never a stop/restart of capture.
+  const wantedBroadcasts = useRef(new Map<string, string>());
+  const watchRequests = useRef(new Map<string, object>());
+  const streamErrors = useRef(new Map<string, string>());
+  const streamProtocol = useRef(false);
   const screenSourceSize = useRef<{ trackId: string; width: number; height: number } | null>(null);
   const mixer = useRef<AudioContext | null>(null);
   const destination = useRef<MediaStreamAudioDestinationNode | null>(null);
@@ -206,10 +231,21 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const reconnectAttempts = useRef(0);
   const audioSamples = useRef(new Map<string, number>());
+  const soundboardPreviousVolume = useRef(settings.soundboardVolume > 0 ? settings.soundboardVolume : 1);
   errorRef.current = reportError;
   settingsRef.current = settings;
   qualityRef.current = quality;
   voiceSocket.current = socket;
+
+  if (!inputMonitorRef.current) inputMonitorRef.current = createInputMonitor({
+    canStart: () => !room.current && !testDesired.current,
+    capture: () => navigator.mediaDevices.getUserMedia({ audio: microphoneConstraints(), video: false }),
+    createContext: () => new AudioContext({ latencyHint: 'interactive', sampleRate: 48000 }),
+    createPipeline: (context, stream, output) => createMicrophonePipeline(
+      context, stream, output, () => ({ ...settingsRef.current, pushToTalk: false }), () => true,
+      level => { if (!backgroundRef.current) inputMeter.publish(level); },
+    ),
+  });
 
   function fail(error: unknown, fallback: string) {
     errorRef.current(error instanceof Error ? `${fallback}: ${error.message}` : fallback);
@@ -230,8 +266,16 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   function microphoneEnabled() {
     return !persistenceBlocked.current && !recordingShortcut.current && !state.current.muted && !state.current.deafened && !moderationRef.current.muted && !moderationRef.current.deafened && (!settingsRef.current.pushToTalk || pushHeld.current);
   }
-  function remoteAudioMuted(peer: MediaPeer) {
-    return state.current.deafened || moderationRef.current.deafened || Boolean(peer.localMuted || peer.state.serverMuted || peer.state.serverDeafened);
+  function remoteAudioMuted(peer: MediaPeer, screenAudio = false) {
+    return state.current.deafened || moderationRef.current.deafened || Boolean(peer.localMuted || peer.state.serverMuted || peer.state.serverDeafened)
+      || (screenAudio && !activeWatchedStreams.current.has(peer.socketId));
+  }
+  function applyPeerAudio(record: PeerConnection) {
+    record.audio.forEach((audio, trackId) => {
+      const screenAudio = record.screenAudioTracks.has(trackId);
+      audio.muted = remoteAudioMuted(record.peer, screenAudio);
+      audio.volume = Math.max(0, Math.min(1, record.peer.volume * (settingsRef.current.outputVolume ?? 1) * (screenAudio ? record.peer.streamVolume ?? 1 : 1)));
+    });
   }
   function applyModeration(next: { muted: boolean; deafened: boolean }) {
     moderationRef.current = { muted: next.muted, deafened: next.deafened };
@@ -245,10 +289,16 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     microphone.current?.getAudioTracks().forEach(track => { track.enabled = enabled; });
     if (!enabled) {
       updateSpeaking(false);
-      setInputLevel(0);
+      inputMeter.publish(0);
     }
     microphonePipeline.current?.refresh();
-    records.current.forEach(record => { record.audio.forEach(audio => { audio.muted = remoteAudioMuted(record.peer); }); });
+    records.current.forEach(applyPeerAudio);
+    soundboardService.updatePlaybackSettings({
+      volume: settingsRef.current.soundboardVolume ?? 1,
+      isMuted: Boolean(settingsRef.current.soundboardMuted || state.current.deafened || moderationRef.current.deafened),
+      outputVolume: settingsRef.current.outputVolume ?? 1,
+      outputDeviceId: settingsRef.current.outputDevice,
+    });
     soundMonitors.current.forEach(monitor => { monitor.gain.value = state.current.deafened || moderationRef.current.deafened ? 0 : 1; });
   }
   async function ensureMixer() {
@@ -334,7 +384,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
         const now = performance.now();
         if (!backgroundRef.current && now - lastInputSampleTime.current >= 50) {
           lastInputSampleTime.current = now;
-          setInputLevel(Math.round(level * 50) / 50);
+          inputMeter.publish(level);
         }
       }, status => {
         if (expectedGeneration !== generation.current || inputRequest !== inputGeneration.current) return;
@@ -397,6 +447,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     updateMicTest({ status: 'idle', level: 0, speaking: false, error: null });
   }
   async function startMicTest(nativeFallback = false) {
+    stopInputMonitor();
     testDesired.current = true;
     const operation = ++testGeneration.current;
     releaseMicTest();
@@ -491,11 +542,17 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     try { await sender.setParameters(parameters); } catch {}
   }
   function scheduleIceRestart(record: PeerConnection) {
-    if (record.restartTimer || record.restartAttempts >= 5 || !room.current || !voiceSocket.current?.connected) return;
+    if (record.restartTimer || record.peer.connectionError || !room.current || !voiceSocket.current?.connected) return;
     record.restartTimer = setTimeout(() => {
       record.restartTimer = undefined;
       if (records.current.get(record.peer.socketId) !== record || !room.current || !voiceSocket.current?.connected) return;
       if (!['failed', 'disconnected'].includes(record.connection.connectionState)) return;
+      if (record.restartAttempts >= 5) {
+        record.peer.connectionError = 'Connection lost. Disconnect and rejoin voice to retry.';
+        errorRef.current(`Could not restore the connection to ${record.peer.user.displayName ?? record.peer.user.name ?? 'a participant'}. Disconnect and rejoin voice to retry.`);
+        refreshPeers();
+        return;
+      }
       record.restartAttempts++;
       record.connection.restartIce();
       scheduleIceRestart(record);
@@ -510,24 +567,190 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       height: captured.height,
     };
   }
+  function attachScreenTrackToPeer(socketId: string) {
+    const record = records.current.get(socketId);
+    if (!record?.screenTransport || !screen.current || !streamSubscribers.current.has(socketId)) return;
+    void record.screenTransport.setStream(screen.current).then(async () => {
+      if (records.current.get(socketId) !== record) return;
+      await configureScreenSender(record.screenTransport!.video.sender);
+      const sender = record.screenTransport!.audio.sender;
+      if (sender.track) {
+        const parameters = sender.getParameters();
+        parameters.encodings = (parameters.encodings.length ? parameters.encodings : [{}]).map(encoding => ({ ...encoding, maxBitrate: 128_000, priority: 'low' }));
+        await sender.setParameters(parameters);
+      }
+    }).catch(error => {
+      if (records.current.get(socketId) === record) fail(error, 'Could not send screen media');
+    });
+  }
+  function adoptScreenLanes(record: PeerConnection) {
+    if (!record.screenCapable || record.screenTransport) return;
+    const lanes = record.connection.getTransceivers().filter(lane => lane !== record.voiceTransceiver);
+    const video = lanes.find(lane => lane.receiver.track.kind === 'video');
+    const audio = lanes.find(lane => lane.receiver.track.kind === 'audio');
+    if (!video || !audio) return;
+    record.screenTransport = createScreenTransport(record.connection, { video, audio });
+    record.screenSenders = record.screenTransport.senders;
+    if (streamSubscribers.current.has(record.peer.socketId)) attachScreenTrackToPeer(record.peer.socketId);
+  }
+  function detachScreenTrackFromPeer(socketId: string) {
+    const record = records.current.get(socketId);
+    if (!record?.screenTransport) return;
+    void record.screenTransport.setStream(null).catch(error => {
+      if (records.current.get(socketId) === record) fail(error, 'Could not stop screen transmission');
+    });
+  }
+  function addStreamSubscriber(socketId: string) {
+    streamSubscribers.current.add(socketId);
+    if (screen.current) {
+      attachScreenTrackToPeer(socketId);
+    }
+  }
+  function removeStreamSubscriber(socketId: string) {
+    streamSubscribers.current.delete(socketId);
+    detachScreenTrackFromPeer(socketId);
+  }
+  function watchStream(peerSocketId: string) {
+    const record = records.current.get(peerSocketId);
+    const broadcastId = record?.peer.state.broadcastId;
+    if (!room.current || !record || !record.peer.state.sharing) return;
+    if (!streamProtocol.current || record.peer.state.streamProtocol !== 1 || !broadcastId) {
+      if (broadcastId) wantedBroadcasts.current.delete(broadcastId);
+      const message = 'Screen viewing requires an updated Haven backend and broadcaster. Voice remains available.';
+      streamErrors.current.set(peerSocketId, message);
+      errorRef.current(message);
+      refreshPeers();
+      return;
+    }
+    if (activeWatchedStreams.current.has(peerSocketId)) return;
+    wantedBroadcasts.current.set(broadcastId, record.peer.user.id);
+    // Bound abandoned reconnect intentions without ever matching a new broadcast by user ID.
+    if (wantedBroadcasts.current.size > 16) wantedBroadcasts.current.delete(wantedBroadcasts.current.keys().next().value!);
+    streamErrors.current.delete(peerSocketId);
+    activeWatchedStreams.current.add(peerSocketId);
+    setWatchingStreams(Array.from(activeWatchedStreams.current));
+    const request = {};
+    watchRequests.current.set(peerSocketId, request);
+    record.receivedBroadcastId = undefined;
+    applyPeerAudio(record);
+    syncPeerVideo(record);
+    const failed = (message: string) => {
+      if (watchRequests.current.get(peerSocketId) !== request || records.current.get(peerSocketId) !== record) return;
+      stopWatchingStream(peerSocketId);
+      streamErrors.current.set(peerSocketId, message);
+      errorRef.current(message);
+      refreshPeers();
+    };
+    const decodedFrames = async () => {
+      const receiver = record.screenTransport?.video.receiver;
+      if (!receiver) return 0;
+      const stats = await receiver.getStats();
+      return Array.from(stats.values()).filter(stat => stat.type === 'inbound-rtp' && stat.kind === 'video').reduce((sum, stat) => sum + (stat.framesDecoded || 0), 0);
+    };
+    const baseline = decodedFrames().catch(() => 0);
+    const deadline = performance.now() + 15_000;
+    const verifyVideo = async () => {
+      if (watchRequests.current.get(peerSocketId) !== request) return;
+      try {
+        const first = await baseline;
+        if (await decodedFrames() > first && watchRequests.current.get(peerSocketId) === request) {
+          record.receivedBroadcastId = broadcastId;
+          syncPeerVideo(record);
+          refreshPeers();
+          return;
+        }
+      } catch { /* The peer may be negotiating or closing. Keep the bounded deadline. */ }
+      if (watchRequests.current.get(peerSocketId) !== request) return;
+      if (performance.now() >= deadline) failed('The stream did not deliver video. Check the connection and try Watch Stream again.');
+      else record.watchTimer = setTimeout(() => { void verifyVideo(); }, 250);
+    };
+    record.watchTimer = setTimeout(() => { void verifyVideo(); }, 250);
+    voiceSocket.current?.timeout(5000).emit('voice:stream-watch', { target: peerSocketId, broadcastId },
+      (error: Error | null, result?: { error?: string; protocol?: number; broadcastId?: string }) => {
+        if (watchRequests.current.get(peerSocketId) !== request) return;
+        if (error) failed('The backend did not acknowledge Watch Stream. It may need an update; please retry.');
+        else if (result?.error) failed(`Could not watch stream: ${result.error}`);
+        else if (result?.protocol !== 1 || result.broadcastId !== broadcastId) failed('The backend does not support this screen-sharing protocol. Voice remains available.');
+      });
+  }
+  function stopWatchingStream(peerSocketId: string) {
+    const record = records.current.get(peerSocketId);
+    const broadcastId = record?.peer.state.broadcastId;
+    if (record?.peer.state.broadcastId) wantedBroadcasts.current.delete(record.peer.state.broadcastId);
+    watchRequests.current.delete(peerSocketId);
+    clearTimeout(record?.watchTimer);
+    if (record) record.receivedBroadcastId = undefined;
+    activeWatchedStreams.current.delete(peerSocketId);
+    setWatchingStreams(Array.from(activeWatchedStreams.current));
+    if (record) {
+      syncPeerVideo(record);
+      applyPeerAudio(record);
+      refreshPeers();
+    }
+    if (!record || !voiceSocket.current?.connected) return;
+    const request = {};
+    watchRequests.current.set(peerSocketId, request);
+    const cancel = (attempt: number) => {
+      voiceSocket.current?.timeout(5000).emit('voice:stream-unwatch', { target: peerSocketId, broadcastId },
+        (error: Error | null, result?: { error?: string }) => {
+          if (watchRequests.current.get(peerSocketId) !== request || records.current.get(peerSocketId) !== record || !voiceSocket.current?.connected || record.peer.state.broadcastId !== broadcastId) return;
+          if (!error && !result?.error) { watchRequests.current.delete(peerSocketId); return; }
+          if (error && attempt < 3) { cancel(attempt + 1); return; }
+          const message = 'The backend could not confirm Stop Watching. Disconnect and rejoin voice if screen traffic continues.';
+          streamErrors.current.set(peerSocketId, message);
+          errorRef.current(message);
+          refreshPeers();
+        });
+    };
+    cancel(1);
+  }
+  function syncPeerVideo(record: PeerConnection) {
+    const stream = record.peer.stream;
+    if (!stream) return;
+    const watching = activeWatchedStreams.current.has(record.peer.socketId) && record.peer.state.sharing && record.receivedBroadcastId === record.peer.state.broadcastId;
+    record.videoTracks.forEach(track => {
+      if (watching && track.readyState === 'live' && !track.muted) {
+        if (!stream.getTracks().includes(track)) stream.addTrack(track);
+      } else stream.removeTrack(track);
+    });
+  }
+  function recoverStreamWatch(record: PeerConnection) {
+    const broadcastId = record.peer.state.broadcastId;
+    if (record.peer.state.sharing && broadcastId && wantedBroadcasts.current.has(broadcastId)) watchStream(record.peer.socketId);
+  }
   function removePeer(socketId: string) {
     pendingSignals.current.delete(socketId);
     const record = records.current.get(socketId);
     if (!record) return;
     records.current.delete(socketId);
+    streamErrors.current.delete(socketId);
+    watchRequests.current.delete(socketId);
+    activeWatchedStreams.current.delete(socketId);
+    clearTimeout(record.watchTimer);
     clearTimeout(record.restartTimer);
+    record.screenTransport?.close();
+    record.connection.onicecandidate = null;
+    record.connection.onnegotiationneeded = null;
+    record.connection.ontrack = null;
+    record.connection.onconnectionstatechange = null;
+    record.connection.getTransceivers().forEach(({ receiver }) => {
+      receiver.track.onended = null;
+      receiver.track.onmute = null;
+      receiver.track.onunmute = null;
+      receiver.track.stop();
+    });
     record.connection.close();
     record.audio.forEach(audio => { audio.pause(); audio.srcObject = null; audio.remove(); });
     byteSamples.current.forEach((_sample, key) => { if (key.startsWith(`${socketId}:`)) byteSamples.current.delete(key); });
     audioSamples.current.forEach((_sample, key) => { if (key.startsWith(`${socketId}:`)) audioSamples.current.delete(key); });
     refreshPeers();
   }
-  function createPeer(socketId: string, user: MediaUser, offerOnInitialNegotiation = true) {
+  function createPeer(socketId: string, user: MediaUser, offerOnInitialNegotiation = true, peerProtocol?: number) {
     const existing = records.current.get(socketId);
     if (existing) return existing;
     const connection = new RTCPeerConnection({ iceServers: iceServers.current });
     const record: PeerConnection = {
-      connection, audio: new Map(), makingOffer: false, ignoreOffer: false, answering: false, candidates: [], screenSenders: [],
+      connection, audio: new Map(), screenAudioTracks: new Set(), screenCapable: streamProtocol.current && peerProtocol === 1, makingOffer: false, ignoreOffer: false, answering: false, candidates: [], screenSenders: [],
       offerOnInitialNegotiation, signalQueue: Promise.resolve(),
       videoTracks: new Map(), restartAttempts: 0, congested: false,
       peer: { socketId, user, stream: null, state: { muted: false, deafened: false, sharing: false }, volume: localPreferences.current.get(user.id)?.volume ?? 1, localMuted: localPreferences.current.get(user.id)?.muted ?? false },
@@ -547,23 +770,33 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       } finally { record.makingOffer = false; }
     };
     connection.ontrack = event => {
+      adoptScreenLanes(record);
+      const screenAudio = event.transceiver === record.screenTransport?.audio;
+      const screenVideo = event.transceiver === record.screenTransport?.video;
+      const voiceAudio = event.transceiver === record.voiceTransceiver;
+      // An older client may offer unsolicited screen lanes. Never play or accept them.
+      if (!voiceAudio && !screenAudio && !screenVideo) {
+        if (event.transceiver && !event.transceiver.sender.track) event.transceiver.direction = 'inactive';
+        return;
+      }
       const stream = record.peer.stream ?? new MediaStream();
-      if (!stream.getTracks().some(track => track.id === event.track.id)) stream.addTrack(event.track);
+      if (event.track.kind !== 'video' && !stream.getTracks().some(track => track.id === event.track.id)) stream.addTrack(event.track);
       if (event.track.kind === 'video') record.videoTracks.set(event.track.id, event.track);
+      if (screenAudio) record.screenAudioTracks.add(event.track.id);
       record.peer.stream = stream;
       if (event.track.kind === 'audio' && !record.audio.has(event.track.id)) {
         const audio = new Audio();
         audio.autoplay = true;
-        audio.muted = remoteAudioMuted(record.peer);
-        audio.volume = Math.max(0, Math.min(1, record.peer.volume * (settingsRef.current.outputVolume ?? 1)));
         audio.srcObject = new MediaStream([event.track]);
         record.audio.set(event.track.id, audio);
+        applyPeerAudio(record);
         void setOutput(audio);
         void audio.play().catch(() => {});
       }
       event.track.onended = () => {
         stream.removeTrack(event.track);
         record.videoTracks.delete(event.track.id);
+        record.screenAudioTracks.delete(event.track.id);
         const audio = record.audio.get(event.track.id);
         if (audio) { audio.pause(); audio.srcObject = null; record.audio.delete(event.track.id); }
         refreshPeers();
@@ -573,9 +806,10 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
         refreshPeers();
       };
       event.track.onunmute = () => {
-        if (event.track.kind === 'video' && record.peer.state.sharing && !stream.getTracks().includes(event.track)) stream.addTrack(event.track);
+        syncPeerVideo(record);
         refreshPeers();
       };
+      syncPeerVideo(record);
       refreshPeers();
     };
     connection.onconnectionstatechange = () => {
@@ -585,11 +819,14 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
         clearTimeout(record.restartTimer);
         record.restartTimer = undefined;
         record.restartAttempts = 0;
+        record.peer.connectionError = undefined;
+        refreshPeers();
       } else if (['failed', 'disconnected'].includes(connection.connectionState)) scheduleIceRestart(record);
     };
     destination.current?.stream.getAudioTracks().forEach(track => {
       const sender = connection.addTrack(track, destination.current!.stream);
       const transceiver = connection.getTransceivers().find(value => value.sender === sender);
+      record.voiceTransceiver = transceiver;
       const codecs = RTCRtpSender.getCapabilities?.('audio')?.codecs;
       if (codecs && transceiver?.setCodecPreferences) {
         const opus = codecs.filter(codec => codec.mimeType.toLowerCase() === 'audio/opus');
@@ -597,11 +834,13 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       }
       void configureAudioSender(sender, record.congested);
     });
-    screen.current?.getTracks().forEach(track => {
-      const sender = connection.addTrack(track, screen.current!);
-      record.screenSenders.push(sender);
-      void configureScreenSender(sender).catch(error => fail(error, 'Could not configure screen encoding'));
-    });
+    if (record.screenCapable && offerOnInitialNegotiation) {
+      record.screenTransport = createScreenTransport(connection);
+      record.screenSenders = record.screenTransport.senders;
+    }
+    if (streamSubscribers.current.has(socketId)) {
+      attachScreenTrackToPeer(socketId);
+    }
     const queued = pendingSignals.current.get(socketId) ?? [];
     pendingSignals.current.delete(socketId);
     queued.forEach(signal => { void receiveSignal(signal); });
@@ -635,6 +874,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
         if (record.ignoreOffer) return;
         record.answering = signal.description.type === 'answer';
         await connection.setRemoteDescription(signal.description);
+        adoptScreenLanes(record);
         record.answering = false;
         for (const candidate of record.candidates.splice(0)) await connection.addIceCandidate(candidate);
         if (signal.description.type === 'offer') {
@@ -658,12 +898,11 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     screenSourceSize.current = null;
     captured?.getTracks().forEach(track => { track.onended = null; track.stop(); });
     records.current.forEach(record => {
-      record.screenSenders.forEach(sender => {
-        try { record.connection.removeTrack(sender); } catch {}
-      });
-      record.screenSenders = [];
+      detachScreenTrackFromPeer(record.peer.socketId);
     });
+    streamSubscribers.current.clear();
     state.current.sharing = false;
+    state.current.broadcastId = undefined;
     setSharing(false);
     setScreenStream(null);
     qualityRef.current = { ...qualityRef.current, nativeWidth: 0, nativeHeight: 0, width: 0, height: 0, stats: { outbound: [], inbound: [] } };
@@ -681,10 +920,17 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     inputGeneration.current++;
     reconnectRoom.current = null;
     updateSpeaking(false);
-    setInputLevel(0);
+    inputMeter.publish(0);
     stopInputMonitor();
     if (room.current) voiceSocket.current?.emit('voice:leave');
     room.current = null;
+    streamSubscribers.current.clear();
+    activeWatchedStreams.current.clear();
+    wantedBroadcasts.current.clear();
+    watchRequests.current.clear();
+    streamErrors.current.clear();
+    streamProtocol.current = false;
+    setWatchingStreams([]);
     stopShare();
     Array.from(records.current.keys()).forEach(removePeer);
     pendingSignals.current.clear();
@@ -702,7 +948,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     destination.current = null;
     byteSamples.current.clear();
     audioSamples.current.clear();
-    pushHeld.current = false;
+    soundboardService.stopAllSounds();
     setLocalStream(null);
     setVoiceChannelId(null);
     setConnectionStatus('disconnected');
@@ -712,12 +958,11 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     if (!recovering) leave();
     const operation = generation.current;
     reconnectRoom.current = channelId;
+    setVoiceChannelId(channelId);
     setConnectionStatus(recovering ? 'reconnecting' : 'connecting');
     try {
       if (!voiceSocket.current?.connected) throw new Error('Chat connection is offline');
-      const response = await fetch(resolveApiUrl('/api/rtc'), { credentials: 'include' });
-      if (!response.ok) throw new Error('Could not load authenticated ICE configuration');
-      const configuration = await response.json() as { iceServers: RTCIceServer[] };
+      const configuration = await api<{ iceServers: RTCIceServer[] }>('/rtc');
       if (operation !== generation.current) return;
       iceServers.current = configuration.iceServers ?? [];
       if (!microphone.current?.getAudioTracks().some(track => track.readyState === 'live') && !await acquireMicrophone(operation)) return;
@@ -726,20 +971,26 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       if (!activeSocket?.connected) throw new Error('Chat connection went offline');
       room.current = channelId;
       setVoiceChannelId(channelId);
-      const responsePayload = await new Promise<{ peers?: ({ socketId: string; user: MediaUser } & Partial<VoiceState>)[]; moderation?: { serverId: string; muted: boolean; deafened: boolean }; error?: string }>((resolve, reject) => {
-        activeSocket.timeout(10_000).emit('voice:join', { channelId }, (error: Error | null, result: { peers?: ({ socketId: string; user: MediaUser } & Partial<VoiceState>)[]; moderation?: { serverId: string; muted: boolean; deafened: boolean }; error?: string }) => {
+      const responsePayload = await new Promise<{ capabilities?: { streamSubscriptions?: number }; peers?: ({ socketId: string; user: MediaUser } & Partial<VoiceState>)[]; moderation?: { serverId: string; muted: boolean; deafened: boolean }; error?: string }>((resolve, reject) => {
+        activeSocket.timeout(10_000).emit('voice:join', { channelId, streamProtocol: 1 }, (error: Error | null, result: { capabilities?: { streamSubscriptions?: number }; peers?: ({ socketId: string; user: MediaUser } & Partial<VoiceState>)[]; moderation?: { serverId: string; muted: boolean; deafened: boolean }; error?: string }) => {
           if (error) reject(new Error('Voice channel did not respond'));
           else resolve(result ?? {});
         });
       });
       if (operation !== generation.current) return;
       if (responsePayload.error) throw new Error(responsePayload.error);
+      streamProtocol.current = responsePayload.capabilities?.streamSubscriptions === 1;
+      if (!streamProtocol.current && screen.current) {
+        stopShare();
+        errorRef.current('The backend no longer supports opt-in screen sharing. Sharing stopped; voice remains available.');
+      }
       roomServerId.current = responsePayload.moderation?.serverId ?? null;
       applyModeration(responsePayload.moderation ?? { muted: false, deafened: false });
       responsePayload.peers?.forEach(peer => {
         if (peer.socketId === activeSocket.id) return;
-        const record = createPeer(peer.socketId, peer.user, false);
-        record.peer.state = { muted: peer.muted ?? false, deafened: peer.deafened ?? false, sharing: peer.sharing ?? false, speaking: peer.speaking ?? false, serverMuted: peer.serverMuted, serverDeafened: peer.serverDeafened };
+        const record = createPeer(peer.socketId, peer.user, false, peer.streamProtocol);
+        record.peer.state = { muted: peer.muted ?? false, deafened: peer.deafened ?? false, sharing: peer.sharing ?? false, speaking: peer.speaking ?? false, serverMuted: peer.serverMuted, serverDeafened: peer.serverDeafened, streamProtocol: peer.streamProtocol, broadcastId: peer.broadcastId };
+        recoverStreamWatch(record);
       });
       refreshPeers();
       emitState();
@@ -747,6 +998,13 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       setConnectionStatus('connected');
       reconnectRoom.current = null;
       reconnectAttempts.current = 0;
+
+      // Automatically play user's custom voice entry sound once on a genuine voice join
+      if (!recovering && roomServerId.current) {
+        const targetServerId = roomServerId.current;
+        const entrySoundId = soundboardService.getEntrySoundId(targetServerId, accountRef.current);
+        if (entrySoundId) activeSocket.emit('sound:play', { soundId: entrySoundId });
+      }
     } catch (error) {
       if (operation !== generation.current) return;
       if (recovering && reconnectAttempts.current < 5 && !/access|permission|not found|deleted|member|limit|full/i.test(error instanceof Error ? error.message : '')) {
@@ -794,6 +1052,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   async function startShare() {
     if (!room.current) { errorRef.current('Join a voice channel before sharing your screen.'); return; }
     if (screen.current) return;
+    if (!streamProtocol.current) { errorRef.current('Screen sharing requires an updated Haven backend. Voice remains available.'); return; }
     const operation = ++screenGeneration.current;
     try {
       const { fps } = effectiveSharePreferences(settingsRef.current, settingsRef.current.gamingMode);
@@ -804,17 +1063,16 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       const source = track.getSettings();
       const native = captureDimensions(source.width ?? 1, source.height ?? 1);
       screen.current = captured;
+      state.current.broadcastId = crypto.randomUUID();
       track.contentHint = 'detail';
       track.onended = stopShare;
       qualityRef.current = { ...qualityRef.current, nativeWidth: native.width, nativeHeight: native.height, ...native };
       await applyShareQuality();
       if (screen.current !== captured) return;
       records.current.forEach(record => {
-        captured.getTracks().forEach(sharedTrack => {
-          const sender = record.connection.addTrack(sharedTrack, captured);
-          record.screenSenders.push(sender);
-          void configureScreenSender(sender).catch(error => fail(error, 'Could not configure screen encoding'));
-        });
+        if (streamSubscribers.current.has(record.peer.socketId)) {
+          attachScreenTrackToPeer(record.peer.socketId);
+        }
       });
       state.current.sharing = true;
       setSharing(true);
@@ -869,11 +1127,10 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     const bounded = Math.max(0, Math.min(1, Number.isFinite(volume) ? volume : 1));
     const preference = localPreferences.current.get(userId) ?? { volume: 1, muted: false };
     localPreferences.current.set(userId, { ...preference, volume: bounded });
-    const master = settingsRef.current.outputVolume ?? 1;
     records.current.forEach(record => {
       if (record.peer.user.id !== userId) return;
       record.peer.volume = bounded;
-      record.audio.forEach(audio => { audio.volume = Math.max(0, Math.min(1, bounded * master)); });
+      applyPeerAudio(record);
     });
     refreshPeers();
   }
@@ -888,6 +1145,12 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     const record = records.current.get(socketId);
     if (record) setUserVolume(record.peer.user.id, volume);
   }
+  function setStreamVolume(socketId: string, volume: number) {
+    const record = records.current.get(socketId);
+    if (!record) return;
+    record.peer.streamVolume = Math.max(0, Math.min(1, Number.isFinite(volume) ? volume : 1));
+    applyPeerAudio(record);
+  }
   function syncUser(user: MediaUser) {
     let changed = false;
     records.current.forEach(record => {
@@ -897,43 +1160,11 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     });
     if (changed) refreshPeers();
   }
-  function stopInputMonitor() {
-    if (inputMonitorRef.current) {
-      inputMonitorRef.current.pipeline.stop();
-      inputMonitorRef.current.stream.getTracks().forEach(t => { t.onended = null; t.stop(); });
-      if (inputMonitorRef.current.context.state !== 'closed') void inputMonitorRef.current.context.close().catch(() => {});
-      inputMonitorRef.current = null;
-    }
-    if (!room.current && micTest.status !== 'running') {
-      setInputLevel(0);
-    }
-  }
-  async function startInputMonitor() {
-    if (room.current || micTest.status === 'running' || inputMonitorRef.current) return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: microphoneConstraints(), video: false });
-      const context = new AudioContext({ latencyHint: 'interactive', sampleRate: 48000 });
-      await context.resume();
-      const output = context.createMediaStreamDestination();
-      const pipeline = createMicrophonePipeline(
-        context,
-        stream,
-        output,
-        () => ({ ...settingsRef.current, pushToTalk: false }),
-        () => true,
-        (level) => {
-          const now = performance.now();
-          if (!backgroundRef.current && now - lastInputSampleTime.current >= 50) {
-            lastInputSampleTime.current = now;
-            setInputLevel(Math.round(level * 50) / 50);
-          }
-        }
-      );
-      inputMonitorRef.current = { stream, context, pipeline };
-    } catch {
-      // Permission or device unavailable
-    }
-  }
+  const stopInputMonitor = useCallback(() => {
+    inputMonitorRef.current?.stop();
+    if (!room.current && !testDesired.current) inputMeter.publish(0);
+  }, [inputMeter]);
+  const startInputMonitor = useCallback(() => inputMonitorRef.current!.start(), []);
   async function testOutputSound() {
     try {
       const context = new AudioContext({ latencyHint: 'interactive' });
@@ -958,50 +1189,48 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     }
   }
   async function playSound(url: string) {
-    const operation = generation.current;
-    try {
-      const context = await ensureMixer();
-      const response = await fetch(resolveApiUrl(url), { credentials: 'include' });
-      if (!response.ok) throw new Error('Sound file could not be loaded');
-      const buffer = await context.decodeAudioData(await response.arrayBuffer());
-      if (operation !== generation.current || context.state === 'closed') return;
-      const source = context.createBufferSource();
-      source.buffer = buffer;
-      source.connect(destination.current!);
-      const monitor = context.createGain();
-      monitor.gain.value = state.current.deafened || moderationRef.current.deafened ? 0 : 1;
-      source.connect(monitor).connect(context.destination);
-      sounds.current.add(source);
-      soundMonitors.current.add(monitor);
-      source.onended = () => { sounds.current.delete(source); soundMonitors.current.delete(monitor); source.disconnect(); monitor.disconnect(); };
-      source.start();
-    } catch (error) { if (operation === generation.current) fail(error, 'Could not play sound'); }
+    await soundboardService.playSound(url);
   }
 
   useEffect(() => {
     if (!socket) return;
     const peerJoined = (payload: { socketId: string; user: MediaUser } & Partial<VoiceState>) => {
       if (room.current && payload.socketId !== socket.id) {
-        const record = createPeer(payload.socketId, payload.user);
-        record.peer.state = { muted: payload.muted ?? false, deafened: payload.deafened ?? false, sharing: payload.sharing ?? false, speaking: payload.speaking ?? false, serverMuted: payload.serverMuted, serverDeafened: payload.serverDeafened };
+        const record = createPeer(payload.socketId, payload.user, true, payload.streamProtocol);
+        record.peer.state = { muted: payload.muted ?? false, deafened: payload.deafened ?? false, sharing: payload.sharing ?? false, speaking: payload.speaking ?? false, serverMuted: payload.serverMuted, serverDeafened: payload.serverDeafened, streamProtocol: payload.streamProtocol, broadcastId: payload.broadcastId };
+        recoverStreamWatch(record);
         refreshPeers();
         emitState();
       }
     };
-    const peerLeft = (payload: { socketId: string }) => removePeer(payload.socketId);
+    const peerLeft = (payload: { socketId: string }) => {
+      streamSubscribers.current.delete(payload.socketId);
+      if (activeWatchedStreams.current.has(payload.socketId)) {
+        activeWatchedStreams.current.delete(payload.socketId);
+        setWatchingStreams(Array.from(activeWatchedStreams.current));
+      }
+      removePeer(payload.socketId);
+    };
     const signal = (payload: Signal) => { void receiveSignal(payload); };
     const peerState = (payload: VoiceState & { socketId: string }) => {
       const record = records.current.get(payload.socketId);
       if (record) {
-        record.peer.state = { muted: payload.muted, deafened: payload.deafened, sharing: payload.sharing, speaking: payload.speaking ?? record.peer.state.speaking, serverMuted: payload.serverMuted, serverDeafened: payload.serverDeafened };
-        record.audio.forEach(audio => { audio.muted = remoteAudioMuted(record.peer); });
-        const stream = record.peer.stream;
-        if (stream) record.videoTracks.forEach(track => {
-          if (!payload.sharing) stream.removeTrack(track);
-          else if (track.readyState === 'live' && !track.muted && !stream.getTracks().includes(track)) stream.addTrack(track);
-        });
+        if (record.peer.state.broadcastId && (!payload.sharing || payload.broadcastId !== record.peer.state.broadcastId)) {
+          wantedBroadcasts.current.delete(record.peer.state.broadcastId);
+          if (activeWatchedStreams.current.has(payload.socketId)) stopWatchingStream(payload.socketId);
+        }
+        record.peer.state = { ...payload, streamProtocol: payload.streamProtocol ?? record.peer.state.streamProtocol, speaking: payload.speaking ?? record.peer.state.speaking };
+        syncPeerVideo(record);
+        applyPeerAudio(record);
+        recoverStreamWatch(record);
         refreshPeers();
       }
+    };
+    const streamWatch = (payload: { viewerSocketId: string; broadcastId?: string }) => {
+      if ((!payload.broadcastId || payload.broadcastId === state.current.broadcastId) && state.current.sharing && records.current.has(payload.viewerSocketId)) addStreamSubscriber(payload.viewerSocketId);
+    };
+    const streamUnwatch = (payload: { viewerSocketId: string; broadcastId?: string }) => {
+      if (!payload.broadcastId || payload.broadcastId === state.current.broadcastId) removeStreamSubscriber(payload.viewerSocketId);
     };
     const forcedDisconnect = (payload: { reason?: string }) => {
       leave();
@@ -1023,12 +1252,27 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       room.current = null;
       Array.from(records.current.keys()).forEach(removePeer);
       pendingSignals.current.clear();
+      streamProtocol.current = false;
+      streamSubscribers.current.clear();
+      activeWatchedStreams.current.clear();
+      setWatchingStreams([]);
       reconnectRoom.current = previous;
       if (previous) { setVoiceChannelId(previous); setConnectionStatus('reconnecting'); }
     };
     const connected = () => { const previous = reconnectRoom.current; if (previous) void join(previous, true); };
     const soundPlayed = (payload: { sound: { url: string }; userId: string }) => {
-      if (!room.current && payload.userId !== currentUserId) void playSound(payload.sound.url);
+      // Must be currently in a voice channel to receive soundboard playback
+      if (!room.current) return;
+      // Do not play if the receiver is deafened
+      if (state.current.deafened || moderationRef.current.deafened) return;
+
+      void soundboardService.playSound(payload.sound.url, {
+        volume: settingsRef.current.soundboardVolume ?? 1,
+        isMuted: settingsRef.current.soundboardMuted ?? false,
+        userId: payload.userId,
+        outputVolume: settingsRef.current.outputVolume ?? 1,
+        outputDeviceId: settingsRef.current.outputDevice,
+      });
     };
     socket.on('user:update', syncUser);
     socket.on('voice:moderated', moderated);
@@ -1036,6 +1280,8 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     socket.on('voice:peer-left', peerLeft);
     socket.on('voice:signal', signal);
     socket.on('voice:state', peerState);
+    socket.on('voice:stream-watch', streamWatch);
+    socket.on('voice:stream-unwatch', streamUnwatch);
     socket.on('voice:activity', activity);
     socket.on('voice:disconnect', forcedDisconnect);
     socket.on('disconnect', disconnected);
@@ -1048,6 +1294,8 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       socket.off('voice:peer-left', peerLeft);
       socket.off('voice:signal', signal);
       socket.off('voice:state', peerState);
+      socket.off('voice:stream-watch', streamWatch);
+      socket.off('voice:stream-unwatch', streamUnwatch);
       socket.off('voice:activity', activity);
       socket.off('voice:disconnect', forcedDisconnect);
       socket.off('disconnect', disconnected);
@@ -1079,7 +1327,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   useEffect(() => {
     if (microphone.current && (room.current || reconnectRoom.current)) void acquireMicrophone(generation.current).catch(error => fail(error, 'Could not update microphone'));
     if (testDesired.current) void startMicTest();
-    if (inputMonitorRef.current) {
+    if (inputMonitorRef.current?.requested) {
       stopInputMonitor();
       void startInputMonitor();
     }
@@ -1099,12 +1347,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   }, [settings.outputDevice]);
 
   useEffect(() => {
-    const master = settings.outputVolume ?? 1;
-    records.current.forEach(record => {
-      record.audio.forEach(audio => {
-        audio.volume = Math.max(0, Math.min(1, record.peer.volume * master));
-      });
-    });
+    records.current.forEach(applyPeerAudio);
   }, [settings.outputVolume]);
 
   useEffect(() => {
@@ -1161,15 +1404,24 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     void enumerateDevices();
     const changed = () => { void enumerateDevices(true); };
     navigator.mediaDevices?.addEventListener('devicechange', changed);
+    const pttShortcut = () => desktopPttKey.current ?? settingsRef.current.pushToTalkKey;
+    const releaseLocalPtt = () => { if (!globalPtt.current && pushHeld.current) { pushHeld.current = false; applyAudioState(); } };
     const keydown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (event.repeat || recordingShortcut.current || globalPtt.current || !matchesShortcut(event, desktopPttKey.current ?? settingsRef.current.pushToTalkKey) || !settingsRef.current.pushToTalk || target?.closest('input,textarea,select,[contenteditable="true"],[role="textbox"],[data-shortcut-recorder]')) return;
+      const shortcut = pttShortcut();
+      if (event.repeat || recordingShortcut.current || globalPtt.current || !settingsRef.current.pushToTalk || !shortcut || !matchesShortcut(event, shortcut)) return;
+      // Only keys that would type text are ignored inside text fields; F-keys, modifiers and chords still work.
+      if (shortcutTypesText(shortcut) && target?.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]')) return;
+      if (target?.closest('[data-shortcut-recorder]')) return;
       event.preventDefault();
       pushHeld.current = true;
       applyAudioState();
     };
-    const keyup = (event: KeyboardEvent) => { if (!globalPtt.current && pushHeld.current && releasesShortcut(event, desktopPttKey.current ?? settingsRef.current.pushToTalkKey)) { pushHeld.current = false; applyAudioState(); } };
-    const blur = () => { if (!globalPtt.current) { pushHeld.current = false; applyAudioState(); } };
+    const keyup = (event: KeyboardEvent) => { if (pushHeld.current && releasesShortcut(event, pttShortcut())) releaseLocalPtt(); };
+    // A browser only sees keys while the page has focus, so any loss of focus or visibility must close the
+    // microphone: the matching key-up would never be delivered.
+    const hidden = () => { if (document.visibilityState === 'hidden') releaseLocalPtt(); };
+    const blur = () => releaseLocalPtt();
     const resume = () => {
       if (mixer.current?.state === 'suspended') void mixer.current.resume().catch(() => {});
       records.current.forEach(record => { record.audio.forEach(audio => { void audio.play().catch(() => {}); }); });
@@ -1181,17 +1433,21 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       applyAudioState();
     };
     window.addEventListener('haven:shortcut-recording', recording);
-    window.addEventListener('keydown', keydown);
-    window.addEventListener('keyup', keyup);
+    window.addEventListener('keydown', keydown, true);
+    window.addEventListener('keyup', keyup, true);
     window.addEventListener('blur', blur);
+    window.addEventListener('pagehide', blur);
+    document.addEventListener('visibilitychange', hidden);
     window.addEventListener('pointerdown', resume);
     window.addEventListener('online', resume);
     return () => {
       navigator.mediaDevices?.removeEventListener('devicechange', changed);
       window.removeEventListener('haven:shortcut-recording', recording);
-      window.removeEventListener('keydown', keydown);
-      window.removeEventListener('keyup', keyup);
+      window.removeEventListener('keydown', keydown, true);
+      window.removeEventListener('keyup', keyup, true);
       window.removeEventListener('blur', blur);
+      window.removeEventListener('pagehide', blur);
+      document.removeEventListener('visibilitychange', hidden);
       window.removeEventListener('pointerdown', resume);
       window.removeEventListener('online', resume);
       leave();
@@ -1287,11 +1543,62 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   }, [voiceChannelId, peers.length, sharing, hasRemoteVideo, settings.gamingMode, background, videoDetailsOpen, connectionStatsSources]);
 
   return {
-    join, leave, voiceChannelId, peers, localStream, screenStream, muted: muted || moderation.muted || moderation.deafened, deafened: deafened || moderation.deafened, speaking, connectionStatus, moderation,
+    join, leave, voiceChannelId,
+    get peers() { return Array.from(records.current.values(), record => ({ ...record.peer })); },
+    localStream, screenStream, muted: muted || moderation.muted || moderation.deafened, deafened: deafened || moderation.deafened, speaking, connectionStatus, moderation,
     toggleMute, toggleDeafen, sharing, startShare, stopShare,
+    watchStream, stopWatchingStream,
+    get watchingStreams() { return Array.from(activeWatchedStreams.current); },
+    isWatchingStream: (id: string) => activeWatchedStreams.current.has(id),
+    streamError: (id: string) => streamErrors.current.get(id),
+    setStreamVolume,
+    addStreamSubscriber, removeStreamSubscriber,
     shareOptions: quality.nativeWidth ? shareOptionsFor(quality.nativeWidth, quality.nativeHeight) : [],
     setShareQuality, quality, settings, persistenceError, setSettings, devices, enumerateDevices, refreshDevices, deviceError, setPeerVolume, setUserVolume, setUserLocallyMuted, playSound,
     micTest, startMicTest, stopMicTest, microphoneProcessing, testProcessing, connectionStatsSources, setVideoDetailsOpen, background,
-    inputLevel, startInputMonitor, stopInputMonitor, testOutputSound,
+    inputMeter, startInputMonitor, stopInputMonitor, testOutputSound,
+    // Soundboard Controls & Entry Sounds
+    get soundboardVolume() { return settings.soundboardVolume ?? 1; },
+    get soundboardMuted() { return Boolean(settings.soundboardMuted || (settings.soundboardVolume ?? 1) === 0); },
+    setSoundboardVolume: (volume: number) => {
+      const bounded = Math.max(0, Math.min(1, volume));
+      const muted = bounded === 0;
+      if (bounded > 0) {
+        soundboardPreviousVolume.current = bounded;
+      }
+      setSettings({ soundboardVolume: bounded, soundboardMuted: muted });
+    },
+    setSoundboardMuted: (muted: boolean) => {
+      setSettings(prev => {
+        if (muted) {
+          if (prev.soundboardVolume > 0) soundboardPreviousVolume.current = prev.soundboardVolume;
+          return { ...prev, soundboardMuted: true, soundboardVolume: 0 };
+        } else {
+          const restored = soundboardPreviousVolume.current > 0 ? soundboardPreviousVolume.current : 1;
+          return { ...prev, soundboardMuted: false, soundboardVolume: restored };
+        }
+      });
+    },
+    toggleSoundboardMute: () => {
+      setSettings(prev => {
+        const isCurrentlyMuted = Boolean(prev.soundboardMuted || (prev.soundboardVolume ?? 1) === 0);
+        if (isCurrentlyMuted) {
+          const restored = soundboardPreviousVolume.current > 0 ? soundboardPreviousVolume.current : 1;
+          return { ...prev, soundboardMuted: false, soundboardVolume: restored };
+        } else {
+          if (prev.soundboardVolume > 0) soundboardPreviousVolume.current = prev.soundboardVolume;
+          return { ...prev, soundboardMuted: true, soundboardVolume: 0 };
+        }
+      });
+    },
+    isUserSoundboardMuted: (userId: string) => soundboardService.isUserSoundboardMuted(userId),
+    setUserSoundboardMuted: (userId: string, muted: boolean) => {
+      soundboardService.setUserSoundboardMuted(userId, muted);
+      refreshPeers();
+    },
+    getEntrySoundId: (serverId: string, user?: User | null) => soundboardService.getEntrySoundId(serverId, user),
+    saveEntrySound: async (serverId: string, soundId: string | null, currentUser: User) => {
+      return await soundboardService.saveEntrySound(serverId, soundId, currentUser);
+    },
   };
 }

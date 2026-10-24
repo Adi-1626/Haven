@@ -5,11 +5,12 @@ const animatedGif = Buffer.from('47494638396101000100800000000000ffffff21ff0b4e4
 
 async function register(page: Page, name: string) {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Join Haven', exact: true }).click();
   await page.getByLabel('DISPLAY NAME', { exact: true }).fill(name);
   await page.getByLabel('USERNAME', { exact: true }).fill(name);
   await page.getByLabel('PASSWORD', { exact: true }).fill('Haven-Custom-Emoji-2026');
   await page.getByRole('button', { name: 'Create your account', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Better, together.', exact: true })).toBeVisible();
+  await expect(page.locator('.my-profile')).toContainText(name);
 }
 
 async function bootstrap(page: Page): Promise<Bootstrap> {
@@ -22,7 +23,7 @@ test('custom static and animated emoji upload, sync, picker, reactions, rename a
   await register(page, `emojia${unique}`);
   const staticPng = Buffer.from(await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 32; const drawing = canvas.getContext('2d')!; drawing.fillStyle = '#99aaff'; drawing.fillRect(0, 0, 32, 32); return canvas.toDataURL('image/png').split(',')[1]; }), 'base64');
   await page.getByRole('button', { name: 'Create a server', exact: true }).first().click();
-  await page.getByLabel('SERVER NAME', { exact: true }).fill(`Emoji lab ${unique}`);
+  await page.getByLabel('Server Name', { exact: true }).fill(`Emoji lab ${unique}`);
   await page.getByRole('button', { name: 'Create server', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Welcome to #general', exact: true })).toBeVisible();
   const server = (await bootstrap(page)).servers[0];

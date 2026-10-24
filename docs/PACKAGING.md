@@ -1,6 +1,20 @@
+# Windows installer
+
+Current public bundles are **Hosted-first**. See the "Hosted-first release candidate — 22 October 2026" section below for production endpoints, explicit separate Local Mode, build provenance and acceptance limits. Older bundle records below describe historical Local Mode verification and are not production approval.
+
+`npm run package:win` builds the application, creates the portable bundle below, then wraps it in an NSIS installer: `release/Haven-<version>-installer/Haven-Setup.exe`, with `Haven-Setup.exe.sha256` and `INSTALLER-INFO.json`. The steps also run separately: `npm run package:win:portable` and `npm run package:installer -- --portable <bundle> [--output release/<NewDirectory>]`. The first installer build downloads electron-builder's NSIS toolchain into its cache.
+
+- **Technology:** electron-builder (exact-pinned devDependency) with `--prepackaged`, so the installer ships the already verified portable payload unchanged (separate Node runtime for `better-sqlite3`, compiled hotkey helper, license notices). Configuration: `apps/desktop/installer/electron-builder.config.cjs`; NSIS hooks: `apps/desktop/installer/installer.nsh`; sidebar artwork: `apps/desktop/installer/sidebar.bmp` (regenerate with `make-sidebar.ps1`).
+- **Install:** per-user wizard (no administrator prompt) into `%LOCALAPPDATA%\Programs\Haven` by default, changeable directory, Start Menu shortcut, optional desktop shortcut and "Launch Haven" on the finish page, Apps & Features entry with publisher, version and uninstaller. Silent: `Haven-Setup.exe /S [/D=C:\Path\Haven]` (run it from PowerShell or cmd; Git Bash rewrites `/S`).
+- **Data:** Haven keeps data in `%APPDATA%\Haven`, outside the install directory. Install and update never touch it. Uninstall keeps it unless the user answers Yes to the removal prompt (default No), or a silent uninstall passes `--delete-app-data`. Uninstall removes the desktop shortcut and a "start at sign-in" entry only when that entry points at the installation being removed. Running Haven processes inside the install directory (including the bundled backend and hotkey helper) are closed before files are replaced; portable copies elsewhere are not touched.
+- **Identity:** `appId` is `electron.app.Haven`, Electron's default AppUserModelID for `app.setName('Haven')`, so shortcuts, taskbar grouping and the login item match the running app.
+- **Payload hygiene:** `scripts/package-audit.mjs <bundle>` fails a build containing development packages (Playwright, Electron, TypeScript, Vite, React and other frontend-only packages, `@types`), Haven source maps or tests, logs, databases, `.env` files, landing or test/evidence directories, or missing runtime files. The installer build runs it before packaging.
+- **Verification:** `npm run verify:installer` installs silently into a temporary directory, audits the installed tree, compares it byte-for-byte with the portable source, checks the Apps & Features entry and Start Menu shortcut, launches Haven in Local Mode with a disposable profile, reinstalls over it (update) and signs in again, then uninstalls and confirms shortcuts, startup entry and data handling. It refuses to run if Haven is already installed for the user and never opens the real profile; it only compares a listing of `%APPDATA%\Haven` before and after. Results: `test-results/installer-verification-<version>.json`.
+- **Distribution:** the installer is unsigned (Windows SmartScreen will warn) and has no auto-update channel. For GitHub Releases, attach `Haven-Setup.exe` under that exact name so `https://github.com/Adi-1626/Haven/releases/latest/download/Haven-Setup.exe` always serves the newest release.
+
 # Windows portable build
 
-Run `npm run package:win` from the project directory after dependencies are installed. The command builds the application and runs `scripts/package-windows.mjs` on Windows x64. The result is `release/Haven-<version>-win32-x64/Haven.exe`, currently `release/Haven-0.4.1-win32-x64/Haven.exe`; distribute the entire directory together.
+Run `npm run package:win:portable` from the project directory after dependencies are installed. The command builds the application and runs `scripts/package-windows.mjs` on Windows x64. Only the backend's production dependency closure is copied (`npm ls --omit=dev --workspace=@haven/backend`); Electron main uses Node built-ins, and the web client is already bundled into `dist/`. Type declarations and source maps are excluded. The result is `release/Haven-<version>-win32-x64/Haven.exe`, currently `release/Haven-0.4.1-win32-x64/Haven.exe`; distribute the entire directory together.
 
 The build includes the installed Electron runtime, compiled client and server, desktop capture picker, production dependency closure, and the exact Node executable running the packaging script. It requires no system Node installation on the destination computer. Node is a separate backend process so `better-sqlite3` keeps its Node ABI; do not rebuild that binding for Electron. Packaging checks an in-memory SQLite query before copying and repeats it using the copied Node runtime and dependencies.
 
@@ -69,3 +83,44 @@ The previous local bundle is `release/Haven-win32-x64/Haven.exe`. Its recorded c
 After the last build, all 32 current files from `electron/`, `build/`, and `dist/` were copied into the bundle and compared against their source SHA-256 hashes. The served client asset is `index-DBZeCjPR.js`, SHA-256 `55ed6bc2381b8e339df4b5413e2d18a239be18427269ecd51ede9ab8ad659451`; copied `dist/index.html` is `46fa344f18ec2311f1f9a55820c99c8a90abc2c69af2e471fc51ce66985bf223`. `PACKAGE-INFO.json` records these payload comparisons. Older unused hashed assets may remain from the initial candidate; the final HTML references the verified current asset.
 
 A standalone Playwright Electron smoke test launched this exact executable with all `PATH` variables removed/empty and `HAVEN_NODE` unset. It verified the visible account page, the final served client asset, `/api/health` returning `{ok:true}`, account creation returning HTTP 201, the authenticated account API and UI, and successful HTTP 200 login after closing and restarting the packaged application against the same isolated profile. This exercises persistent packaged SQLite storage and the bundled backend runtime. Both application instances were closed and the temporary profile was removed after validating its path. This smoke test does not replace real-device media or cross-machine network tests.
+# Hosted-first release candidate — 22 October 2026
+
+Public Windows bundles now include a strictly validated `resources/app/release-config.json` with Hosted Mode, backend `https://haven-backend.getvoroa.com` and frontend `https://haven-ea6.pages.dev`. A fresh packaged launch loads that frontend directly and supplies the backend through the existing native API bridge. Missing/invalid packaged defaults fail closed; no automatic Local Mode fallback occurs. A historical saved localhost connection cannot replace the public default. Explicit `--server` / `HAVEN_SERVER` and saved HTTPS server selection remain deliberate connection choices.
+
+Source development (`npm run desktop`, `npm run desktop:dev`) keeps its existing Local Mode behavior. For explicit Local Mode from a packaged app, use `Haven.exe --local-mode`. Without an explicit test profile it uses `%APPDATA%/Haven Local`, keeping personal development data separate from Hosted. `--local-mode` ignores the saved Hosted server and conflicts with `--server` / `--dev`. Startup registration retains that Local Mode argument. Existing `%APPDATA%/Haven` data is neither moved nor migrated. To open an existing personal Local profile deliberately, supply its path with the existing `--profile=...` or `HAVEN_PROFILE_DIR` override.
+
+`package-windows.mjs` writes only public configuration; `package-installer.mjs` rejects absent/invalid defaults and stale main/config modules before preserving the existing NSIS wizard, shortcuts and reinstall/uninstall behavior. The payload audit rejects private key/profile/environment/database artifacts, recognizable secret keys, service-role JWTs and credential-bearing PostgreSQL URLs. The bundled backend and SQLite runtime remain available for explicit Local Mode; no personal databases are copied.
+
+Build into new directories because existing release outputs are preserved:
+
+```powershell
+npm run build
+node scripts/package-windows.mjs --output release/Haven-hosted-review-r2-20261022
+node scripts/package-installer.mjs --portable release/Haven-hosted-review-r2-20261022 --output release/Haven-hosted-review-20261022-installer
+node scripts/verify-installer.mjs release/Haven-hosted-review-20261022-installer/Haven-Setup.exe
+```
+
+This unsigned, unpublished candidate retains the existing package version; it is not an approved public release. Hosted loads the deployed frontend, whose current bundle is older than this workspace and lacks current stream/onboarding/refresh markers. Do not infer feature compatibility from the health endpoint or matching version number. See `docs/AGY-PRODUCTION-REVIEW-20261022.md` and `output/production-review-20261022/REPORT.md` for evidence and remaining release gates.
+
+## Pre-push audit — 24 October 2026
+
+Preserved candidate: `release/Haven-hosted-candidate-r2-20261024-installer/Haven-Setup.exe`, version
+0.4.1, 128,438,544 bytes, SHA-256
+`b3891683f46e86d5a5049dd6fdf83ccf3d11d8c6979e527398aef48fa3be8641`.
+It remains unsigned and unpublished. This audit did not overwrite or rebuild it.
+
+The candidate **must not be publicly released**: its native media-settings schema predates the
+`soundboardVolume`/`soundboardMuted` fields sent by the current renderer. Rejected saves can trigger
+the microphone safety block. The source schema and acknowledgement/restoration tests are now fixed;
+all three real Electron media E2E cases pass. The candidate also predates the patched Electron 44.9.1
+and dependency lockfile. A fresh build and clean-profile installation verification are required after
+these source fixes. Earlier native bridge smoke checks did not cover this renderer/schema mismatch.
+Run `npm ci` before that rebuild. Packaging now verifies both the installed Electron package and its
+runtime version file against the exact manifest pin, records that version, and rejects stale runtimes
+when wrapping a portable bundle in NSIS. This also prevents a changed lockfile from giving false
+confidence while an older development `node_modules` remains installed.
+
+The runtime still opens the actual Hosted authentication app, with no landing payload or personal
+SQLite data. The deployed Hosted frontend remains older than the source planetary authentication,
+onboarding, refresh and opt-in stream protocol. A coordinated, approved web/backend/database rollout
+and production acceptance remain separate release gates; rebuilding the installer cannot satisfy them.

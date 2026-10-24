@@ -13,6 +13,7 @@ test('desktop IPC ignores queued requests after the main window is destroyed', a
   const windows = [];
   const written = [];
   const voiceStates = [];
+  const menus = [];
   const desktop = { attachWindow: () => {}, startHidden: () => false, snapshot: () => ({}), setVoiceState: state => voiceStates.push(state) };
   class FakeWindow extends EventEmitter {
     constructor() {
@@ -28,7 +29,7 @@ test('desktop IPC ignores queued requests after the main window is destroyed', a
   }
   const application = new EventEmitter();
   Object.assign(application, { setName: () => {}, getPath: () => __dirname, whenReady: () => Promise.resolve(), quit: () => {} });
-  const electron = { app: application, BrowserWindow: FakeWindow, ipcMain: { on: (name, listener) => listeners.set(name, listener), handle: (name, handler) => handlers.set(name, handler) }, powerMonitor: new EventEmitter() };
+  const electron = { app: application, BrowserWindow: FakeWindow, Menu: { setApplicationMenu: menu => menus.push(menu) }, ipcMain: { on: (name, listener) => listeners.set(name, listener), handle: (name, handler) => handlers.set(name, handler) }, powerMonitor: new EventEmitter() };
   const directory = electronDir;
   const sandbox = {
     __dirname: directory, console, URL, setTimeout,
@@ -37,6 +38,7 @@ test('desktop IPC ignores queued requests after the main window is destroyed', a
   };
   vm.runInNewContext(fs.readFileSync(path.join(directory, 'main.cjs'), 'utf8'), sandbox);
   await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(menus, [null]);
   const main = windows[0];
   const event = { sender: main.contents, senderFrame: main.contents.mainFrame, returnValue: undefined };
   listeners.get('desktop:client-setting-read')(event, 'haven.voice.state');

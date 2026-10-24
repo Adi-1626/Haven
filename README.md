@@ -1,6 +1,10 @@
 # Haven 0.4.1
 
-An independent, self-hosted desktop community application inspired by Discord's interaction model. Electron, React, TypeScript, SQLite, Socket.IO and WebRTC. No Discord code, assets, services or accounts are used.
+An independent desktop community application inspired by Discord's interaction model. Electron, React, TypeScript, Socket.IO and WebRTC, with separate Hosted (Supabase Auth/PostgreSQL) and Local (SQLite) modes. No Discord code, assets, services or accounts are used.
+
+Public installer candidates default to Hosted Mode: the application at `https://haven-ea6.pages.dev` uses `https://haven-backend.getvoroa.com`. `apps/landing` is the separate marketing website and is excluded from the desktop payload. Source development commands below retain Local Mode. A packaged app can explicitly launch Local Mode with `Haven.exe --local-mode`, using the separate `%APPDATA%/Haven Local` profile. Local accounts and data are never migrated to Hosted.
+
+The current version remains **0.4.1**, not an approved public v1.0 release. The preserved 24 October installer candidate predates the latest desktop settings/dependency fixes and must be rebuilt and retested before publication. Hosted still serves an older frontend/backend revision; building Electron does not deploy that web application. See [packaging status](docs/PACKAGING.md) and the [required Hosted rollout](docs/HOSTED-AUTH-ROLLOUT.md) before deployment.
 
 Version 0.4 adds live profile-picture updates during voice, original-picture viewing, recorded keyboard shortcuts, permission-checked custom server emoji (including animation), expanded server settings and right-click menus with local volume/mute and community moderation. See the [community experience guide](docs/COMMUNITY-EXPERIENCE.md) for controls, limits and validation.
 
@@ -49,13 +53,13 @@ Open `http://127.0.0.1:3001`. `npm run dev` runs the UI on port 5173 and API on 
 - Optional Windows tray/background/startup behavior, global mute/deafen, stable desktop settings and low-resource gaming mode; original animated emoji in messages, reactions and picker with motion/background controls.
 - Recorded editable key combinations, live voice avatars, original profile-picture viewing, participant context menus with local audio controls, and persistent community mute/deafen/disconnect actions with role checks.
 - Server name/description/icon editing and authenticated static/animated custom emoji uploads, renaming and deletion, integrated with chat, reactions and the server-scoped picker.
-- Custom audio soundboards with stored uploads up to 5 MB. Sounds mix into the user's outgoing voice track; remote listeners hear that mix through WebRTC.
+- Custom audio soundboards with stored uploads up to 5 MB. Authorized room events play sounds on each listener's client, independently of microphone mute and push-to-talk, with separate volume and mute controls.
 - Window/display capture through a desktop source picker. Browser clients use their native screen picker. Optional Windows system audio requires explicit selection in the desktop picker and captures the computer's whole audio output.
 - Native and dynamically derived lower resolution choices; 15/30/60 fps targets; per-viewer bitrate budget; actual outgoing/incoming WebRTC video statistics.
 - Expanded stream viewing and actual fullscreen with voice controls and explicit Stop Sharing; voice remains connected during text navigation and after capture ends.
 - Responsive layout, keyboard message controls, saved conversation selection, unread badges, background notifications, friend request management and persistent blocking.
 
-There are no seed accounts or invented chat messages. Browser tests create disposable accounts and databases outside the normal application profile.
+Normal Local and Hosted sessions contain no seed accounts or invented chat messages. The explicit `npm run dev:ui` fixture mode uses fictional data and simulated media; it does not verify production authentication or transport. Browser integration tests create disposable accounts and databases outside the normal application profile.
 
 ## Screen sharing policy
 
@@ -103,7 +107,7 @@ Browser tests use installed Chrome with synthetic microphone input; Electron tes
 
 ## Boundaries
 
-This is a working small-community implementation. It does not yet provide arbitrary custom roles/channel permission overrides, a media SFU, public hosted infrastructure, email recovery/MFA, an installer/auto-updater, advanced moderation, full mobile background calling, message virtualization, or full Discord feature parity. Group DMs support text; voice lives in server voice channels. Window/system audio support and sustained native 60 fps vary by OS, driver, source and network.
+This is a working small-community implementation. It does not yet provide arbitrary custom roles/channel permission overrides, a media SFU, MFA, an approved signed public installer/auto-updater, advanced moderation, full mobile background calling, message virtualization, or full Discord feature parity. Hosted email verification/recovery and the NSIS installer have local test coverage, with production acceptance still pending. Group DMs support text; voice lives in server voice channels. Window/system audio support and sustained native 60 fps vary by OS, driver, source and network.
 
 Physical microphone/speaker quality, echo under real devices, TURN-only paths, 4K/60 fps sustained throughput, CPU/GPU utilization under load, long-running reliability and broad adversarial security testing require separate environment/hardware validation. Do not interpret a passing local test as those guarantees. Verification evidence is recorded in `docs/VERIFICATION.md`.
 
@@ -111,14 +115,15 @@ Physical microphone/speaker quality, echo under real devices, TURN-only paths, 4
 
 | Path | Purpose |
 | --- | --- |
-| `server/app.ts` | Authenticated HTTP, SQLite, file access and realtime authorization |
-| `server/index.ts` | API startup and shutdown |
-| `shared/types.ts` | Shared API objects |
-| `server/API.md` | HTTP/socket contract and limits |
-| `client/App.tsx` | Community, chat, account and settings interface |
-| `client/media.ts` | Voice session lifecycle, sound mixing, capture and WebRTC |
-| `client/media-quality.ts` | Source-bounded quality calculations |
-| `electron/` | Isolated desktop shell and capture picker |
+| `apps/backend/src/app.ts` | Authenticated HTTP, file access and realtime authorization |
+| `apps/backend/src/index.ts` | API startup and shutdown |
+| `packages/shared/src/types.ts` | Shared API objects |
+| `apps/backend/API.md` | HTTP/socket contract and limits |
+| `apps/web/src/App.tsx` | Community, chat, account and settings interface |
+| `apps/web/src/media.ts` | Voice session lifecycle, capture and WebRTC |
+| `apps/web/src/media-quality.ts` | Source-bounded quality calculations |
+| `apps/desktop/electron/` | Isolated desktop shell and capture picker |
+| `apps/landing/` | Separate public marketing website |
 | `e2e/` | Independent browser and real desktop-window transport checks |
 | `docs/INVESTIGATION.md` | REA findings, evidence IDs and explicit unknowns |
 

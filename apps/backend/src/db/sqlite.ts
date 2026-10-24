@@ -1,8 +1,12 @@
 import Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
+import { assertActiveInvite } from './invites.js';
+import { AttachmentClaimError, FriendRequestConflictError } from './types.js';
 import type {
   DatabaseAdapter,
+  MessageAttachmentRow,
+  MessageReactionRow,
   UserRow,
   ServerRow,
   MemberRow,
@@ -82,6 +86,10 @@ export class SqliteAdapter implements DatabaseAdapter {
     this.db.close();
   }
 
+  async checkConnection(): Promise<void> {
+    this.db.prepare('SELECT 1').get();
+  }
+
   private all(sql: string, ...values: any[]): Row[] {
     return this.db.prepare(sql).all(...values) as Row[];
   }
@@ -111,6 +119,21 @@ export class SqliteAdapter implements DatabaseAdapter {
     };
   }
 
+  async getUsers(userIds: string[]): Promise<UserRow[]> {
+    if (!userIds.length) return [];
+    return this.all(`SELECT * FROM users WHERE id IN (SELECT value FROM json_each(?))`, JSON.stringify(userIds)).map(row => ({
+      id: row.id,
+      username: row.username,
+      displayName: row.displayName,
+      password: row.password,
+      bio: row.bio,
+      avatar: row.avatar,
+      status: row.status,
+      settings: row.settings,
+      createdAt: row.createdAt,
+    }));
+  }
+
   async getUserByUsername(username: string): Promise<UserRow | undefined> {
     const row = this.one('SELECT * FROM users WHERE username=?', username);
     if (!row) return undefined;
@@ -127,27 +150,52 @@ export class SqliteAdapter implements DatabaseAdapter {
     };
   }
 
-  async createUser(user: { id: string; username: string; displayName: string; password?: string; createdAt: number }): Promise<void> {
+  async createUser(user: { id: string; username: string; displayName: string; password?: string; settings?: string; createdAt: number }): Promise<void> {
     this.run(
-      'INSERT INTO users(id,username,displayName,password,createdAt) VALUES(?,?,?,?,?)',
+      'INSERT INTO users(id,username,displayName,password,settings,createdAt) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',
       user.id,
       user.username,
       user.displayName,
       user.password ?? '',
+      user.settings ?? '{}',
       user.createdAt
     );
   }
 
+  async setUsername(userId: string, username: string): Promise<boolean> {
+    try {
+      this.run('UPDATE users SET username=? WHERE id=?', username, userId);
+      return true;
+    } catch (error) {
+      if (error instanceof Error && /UNIQUE constraint failed/i.test(error.message)) return false;
+      throw error;
+    }
+  }
+
+  async completeUserProfile(userId: string, username: string, displayName: string): Promise<'completed' | 'unavailable' | 'already-complete'> {
+    try {
+      const result = this.run(`UPDATE users SET username=?, displayName=?, settings=json_set(settings, '$.profileCompleted', json('true'))
+        WHERE id=? AND json_type(settings, '$.profileCompleted')='false'`, username, displayName, userId);
+      return result.changes ? 'completed' : 'already-complete';
+    } catch (error) {
+      if (error instanceof Error && /UNIQUE constraint failed/i.test(error.message)) return 'unavailable';
+      throw error;
+    }
+  }
+
   async updateUser(userId: string, patch: { displayName?: string; bio?: string; avatar?: string; status?: string; settings?: string }): Promise<void> {
-    const current = await this.getUser(userId);
+    // Keep PostgreSQL's shallow JSONB merge semantics (including JSON null).
+    // No await between this read and write: SQLite executes both synchronously.
+    const current = this.one('SELECT settings FROM users WHERE id=?', userId);
     if (!current) return;
+    const settings = patch.settings === undefined ? null : JSON.stringify({ ...JSON.parse(current.settings), ...JSON.parse(patch.settings) });
     this.run(
-      'UPDATE users SET displayName=?,bio=?,avatar=?,status=?,settings=? WHERE id=?',
-      patch.displayName ?? current.displayName,
-      patch.bio ?? current.bio,
-      patch.avatar ?? current.avatar,
-      patch.status ?? current.status,
-      patch.settings ?? current.settings,
+      'UPDATE users SET displayName=COALESCE(?,displayName),bio=COALESCE(?,bio),avatar=COALESCE(?,avatar),status=COALESCE(?,status),settings=COALESCE(?,settings) WHERE id=?',
+      patch.displayName ?? null,
+      patch.bio ?? null,
+      patch.avatar ?? null,
+      patch.status ?? null,
+      settings,
       userId
     );
   }
@@ -329,13 +377,11 @@ export class SqliteAdapter implements DatabaseAdapter {
   }
 
   async updateChannel(channelId: string, patch: { name?: string; topic?: string; position?: number }): Promise<void> {
-    const current = await this.getChannel(channelId);
-    if (!current) return;
     this.run(
-      'UPDATE channels SET name=?,topic=?,position=? WHERE id=?',
-      patch.name ?? current.name,
-      patch.topic ?? current.topic,
-      patch.position ?? current.position,
+      'UPDATE channels SET name=COALESCE(?,name),topic=COALESCE(?,topic),position=COALESCE(?,position) WHERE id=?',
+      patch.name ?? null,
+      patch.topic ?? null,
+      patch.position ?? null,
       channelId
     );
   }
@@ -381,27 +427,24 @@ export class SqliteAdapter implements DatabaseAdapter {
   async joinInvite(code: string, userId: string): Promise<InviteRow> {
     return this.db.transaction(() => {
       const row = this.one('SELECT * FROM invites WHERE code=?', code);
-      if (!row) throw new Error('Invite not found');
-      this.run("INSERT OR IGNORE INTO members(serverId,userId,role) VALUES(?,?,'member')", row.serverId, userId);
-      return {
-        code: row.code,
-        serverId: row.serverId,
-        createdAt: row.createdAt,
-        expiresAt: row.expiresAt ?? null,
-        revokedAt: row.revokedAt ?? null,
+      const invitation: InviteRow | undefined = row && {
+        code: row.code, serverId: row.serverId, createdAt: row.createdAt,
+        expiresAt: row.expiresAt ?? null, revokedAt: row.revokedAt ?? null,
       };
-    })();
+      assertActiveInvite(invitation);
+      this.run("INSERT OR IGNORE INTO members(serverId,userId,role) VALUES(?,?,'member')", invitation.serverId, userId);
+      return invitation;
+    }).immediate();
   }
 
   // Conversations
   async getUserConversations(userId: string): Promise<ConversationRow[]> {
-    const rows = this.all('SELECT c.id FROM conversations c JOIN conversationMembers m ON m.conversationId=c.id WHERE m.userId=? ORDER BY c.createdAt DESC', userId);
-    const conversations: ConversationRow[] = [];
-    for (const row of rows) {
-      const conv = await this.getConversation(row.id);
-      if (conv) conversations.push(conv);
-    }
-    return conversations;
+    const rows = this.all(
+      `SELECT c.id, c.name, c.createdAt, (SELECT json_group_array(cm.userId) FROM conversationMembers cm WHERE cm.conversationId=c.id) AS memberIds
+       FROM conversations c JOIN conversationMembers m ON m.conversationId=c.id WHERE m.userId=? ORDER BY c.createdAt DESC`,
+      userId
+    );
+    return rows.map(row => ({ id: row.id, name: row.name ?? '', createdAt: row.createdAt, memberIds: JSON.parse(row.memberIds) }));
   }
 
   async getConversation(conversationId: string): Promise<ConversationRow | undefined> {
@@ -451,22 +494,24 @@ export class SqliteAdapter implements DatabaseAdapter {
   }
 
   // Messages
-  async getMessages(target: { channelId?: string; conversationId?: string }, before: number, query: string, limit: number): Promise<string[]> {
+  async getMessages(target: { channelId?: string; conversationId?: string }, before: number, query: string, limit: number, beforeId?: string): Promise<string[]> {
     const field = target.channelId ? 'channelId' : 'conversationId';
     const value = target.channelId ?? target.conversationId;
+    // Ties on createdAt are ordered by rowid; the cursor continues from the boundary message's rowid.
+    const cursor = beforeId === undefined
+      ? 'createdAt<?'
+      : '(createdAt<? OR (createdAt=? AND rowid<COALESCE((SELECT rowid FROM messages WHERE id=?),-1)))';
     const rows = this.all(
-      `SELECT id FROM messages WHERE ${field}=? AND createdAt<? AND instr(lower(content),lower(?))>0 ORDER BY createdAt DESC,rowid DESC LIMIT ?`,
+      `SELECT id FROM messages WHERE ${field}=? AND ${cursor} AND instr(lower(content),lower(?))>0 ORDER BY createdAt DESC,rowid DESC LIMIT ?`,
       value,
-      before,
+      ...(beforeId === undefined ? [before] : [before, before, beforeId]),
       query,
       limit
     );
     return rows.map(r => r.id as string);
   }
 
-  async getMessage(messageId: string): Promise<MessageRow | undefined> {
-    const row = this.one('SELECT * FROM messages WHERE id=?', messageId);
-    if (!row) return undefined;
+  private mapMessage(row: Row): MessageRow {
     return {
       id: row.id,
       channelId: row.channelId ?? null,
@@ -477,6 +522,28 @@ export class SqliteAdapter implements DatabaseAdapter {
       createdAt: row.createdAt,
       editedAt: row.editedAt ?? null,
     };
+  }
+
+  async getMessage(messageId: string): Promise<MessageRow | undefined> {
+    const row = this.one('SELECT * FROM messages WHERE id=?', messageId);
+    return row && this.mapMessage(row);
+  }
+
+  async getMessagesByIds(messageIds: string[]): Promise<MessageRow[]> {
+    if (!messageIds.length) return [];
+    return this.all('SELECT * FROM messages WHERE id IN (SELECT value FROM json_each(?))', JSON.stringify(messageIds)).map(row => this.mapMessage(row));
+  }
+
+  async getAttachmentsForMessages(messageIds: string[]): Promise<MessageAttachmentRow[]> {
+    if (!messageIds.length) return [];
+    return this.all('SELECT messageId,id,name,mime,size FROM attachments WHERE messageId IN (SELECT value FROM json_each(?)) ORDER BY rowid', JSON.stringify(messageIds))
+      .map(r => ({ messageId: r.messageId, id: r.id, name: r.name, mime: r.mime, size: r.size }));
+  }
+
+  async getReactionsForMessages(messageIds: string[]): Promise<MessageReactionRow[]> {
+    if (!messageIds.length) return [];
+    return this.all('SELECT messageId,emoji,userId FROM reactions WHERE messageId IN (SELECT value FROM json_each(?)) ORDER BY rowid', JSON.stringify(messageIds))
+      .map(r => ({ messageId: r.messageId, emoji: r.emoji, userId: r.userId }));
   }
 
   async createMessage(message: { id: string; channelId?: string | null; conversationId?: string | null; authorId: string; content: string; replyTo?: string | null; attachmentIds: string[] }): Promise<number> {
@@ -492,8 +559,12 @@ export class SqliteAdapter implements DatabaseAdapter {
         message.replyTo ?? null,
         createdAt
       );
-      for (const attachmentId of message.attachmentIds) {
-        this.run('UPDATE attachments SET messageId=? WHERE id=?', message.id, attachmentId);
+      for (const attachmentId of new Set(message.attachmentIds)) {
+        const claimed = this.run(
+          'UPDATE attachments SET messageId=? WHERE id=? AND messageId IS NULL AND uploaderId=? AND channelId IS ? AND conversationId IS ?',
+          message.id, attachmentId, message.authorId, message.channelId ?? null, message.conversationId ?? null
+        );
+        if (claimed.changes !== 1) throw new AttachmentClaimError();
       }
       return createdAt;
     })();
@@ -609,6 +680,8 @@ export class SqliteAdapter implements DatabaseAdapter {
   }
 
   async createFriendRequest(id: string, fromId: string, toId: string, createdAt: number): Promise<void> {
+    const existing = this.one('SELECT fromId FROM friendRequests WHERE (fromId=? AND toId=?) OR (fromId=? AND toId=?)', fromId, toId, toId, fromId);
+    if (existing) throw new FriendRequestConflictError(existing.fromId === toId);
     this.run('INSERT INTO friendRequests VALUES(?,?,?,?)', id, fromId, toId, createdAt);
   }
 

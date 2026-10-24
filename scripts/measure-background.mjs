@@ -128,7 +128,7 @@ try {
   await measure('voice-visible', false);
   await measure('voice-minimized', true);
   await instance.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows()[0]; window.restore(); window.show(); });
-  await main.getByRole('button', { name: 'User settings', exact: true }).click();
+  await main.getByRole('button', { name: 'Voice & video settings', exact: true }).click();
   await main.getByRole('button', { name: 'voice & video', exact: true }).click();
   await main.getByRole('combobox', { name: 'Noise suppression mode', exact: true }).selectOption('enhanced');
   await main.getByRole('status').filter({ hasText: 'Outgoing microphone:' }).filter({ hasText: 'RNNoise active' }).waitFor();

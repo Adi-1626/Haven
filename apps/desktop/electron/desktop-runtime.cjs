@@ -4,7 +4,7 @@ const { defaults, parseShortcut, validateSettings } = require('./desktop-setting
 const { startNativeHotkeys } = require('./native-hotkeys.cjs');
 const { liveWindowContents } = require('./client-access.cjs');
 
-function createDesktopRuntime({ app, Tray, Menu, nativeImage, globalShortcut, getWindow, getClients, onQuit }) {
+function createDesktopRuntime({ app, Tray, Menu, nativeImage, iconPath, globalShortcut, getWindow, getClients, onQuit }) {
   const settingsFile = path.join(app.getPath('userData'), 'desktop-settings.json');
   let settings = { ...defaults };
   let shortcutErrors = [];
@@ -53,13 +53,19 @@ function createDesktopRuntime({ app, Tray, Menu, nativeImage, globalShortcut, ge
   const ensureTray = () => {
     if (!settings.closeToTray && !settings.minimizeToTray) { tray?.destroy(); tray = undefined; trayState = undefined; return; }
     if (!tray) {
-      const pixels = Buffer.alloc(32 * 32 * 4);
-      for (let vertical = 0; vertical < 32; vertical++) for (let horizontal = 0; horizontal < 32; horizontal++) {
-        const index = (vertical * 32 + horizontal) * 4;
-        const letter = vertical >= 7 && vertical <= 24 && ((horizontal >= 7 && horizontal <= 10) || (horizontal >= 21 && horizontal <= 24) || (vertical >= 14 && vertical <= 17 && horizontal >= 7 && horizontal <= 24));
-        pixels[index] = letter ? 255 : 215; pixels[index + 1] = letter ? 255 : 113; pixels[index + 2] = letter ? 255 : 102; pixels[index + 3] = 255;
+      // A multi-resolution .ico path lets Windows pick the tray size for the current DPI.
+      let image = iconPath && fs.existsSync(iconPath) ? iconPath : undefined;
+      if (!image) {
+        // Fallback when the bundled icon is missing: a plain lavender disc rather than an empty tray slot.
+        const pixels = Buffer.alloc(32 * 32 * 4);
+        for (let vertical = 0; vertical < 32; vertical++) for (let horizontal = 0; horizontal < 32; horizontal++) {
+          const index = (vertical * 32 + horizontal) * 4;
+          const inside = (horizontal - 15.5) ** 2 + (vertical - 15.5) ** 2 <= 13 ** 2;
+          pixels[index] = 255; pixels[index + 1] = 193; pixels[index + 2] = 192; pixels[index + 3] = inside ? 255 : 0;
+        }
+        image = nativeImage.createFromBitmap(pixels, { width: 32, height: 32 });
       }
-      tray = new Tray(nativeImage.createFromBitmap(pixels, { width: 32, height: 32 }));
+      tray = new Tray(image);
       tray.on('double-click', restore);
     }
     updateTray();
@@ -67,17 +73,23 @@ function createDesktopRuntime({ app, Tray, Menu, nativeImage, globalShortcut, ge
   const registerShortcuts = next => {
     globalShortcut.unregisterAll();
     const failures = [];
+    const attempt = (shortcut, callback) => { try { return globalShortcut.register(shortcut, callback); } catch { return false; } };
     for (const [setting, action] of [['muteShortcut', 'mute'], ['deafenShortcut', 'deafen']]) {
-      if (next[setting] && !globalShortcut.register(next[setting], () => send({ action }))) failures.push(`${action}: ${next[setting]} is already registered by another application`);
+      const accelerator = next[setting] && parseShortcut(next[setting]).accelerator;
+      if (accelerator && !attempt(accelerator, () => send({ action }))) failures.push(`${action}: ${next[setting]} is already registered by another application`);
     }
-    if (next.pttShortcut) {
-      if (!globalShortcut.register(next.pttShortcut, () => {})) failures.push(`push-to-talk: ${next.pttShortcut} is already registered by another application`);
-      else globalShortcut.unregister(next.pttShortcut);
+    // Push-to-talk is observed by the keyboard hook, which works even when another
+    // application owns the hotkey. Probe it only to warn about the conflict.
+    const probe = next.pttShortcut && parseShortcut(next.pttShortcut, { bare: true }).accelerator;
+    if (probe) {
+      if (!attempt(probe, () => {})) failures.push(`push-to-talk: ${next.pttShortcut} is already registered by another application`);
+      else globalShortcut.unregister(probe);
     }
     return failures;
   };
   const syncHelper = async () => {
-    const wanted = voice.connected && voice.pushToTalk && !!settings.pttShortcut && !shortcutErrors.some(error => error.startsWith('push-to-talk:'));
+    // A hotkey conflict is reported but does not disable the hook-based helper.
+    const wanted = voice.connected && voice.pushToTalk && !!settings.pttShortcut;
     if (!wanted) {
       helperGeneration++;
       helper?.stop(); helper = undefined;
@@ -85,7 +97,7 @@ function createDesktopRuntime({ app, Tray, Menu, nativeImage, globalShortcut, ge
       broadcast();
       return;
     }
-    if (helper) { helper.configure(recording ? null : parseShortcut(settings.pttShortcut)); return; }
+    if (helper) { helper.configure(recording ? null : parseShortcut(settings.pttShortcut, { bare: true })); return; }
     if (helperStarting) return;
     const generation = ++helperGeneration;
     helperStarting = startNativeHotkeys(app.getPath('userData'), event => {
@@ -99,7 +111,7 @@ function createDesktopRuntime({ app, Tray, Menu, nativeImage, globalShortcut, ge
     try {
       const started = await helperStarting;
       if (generation !== helperGeneration || quitting) started.stop();
-      else { helper = started; helper.configure(recording ? null : parseShortcut(settings.pttShortcut)); shortcutErrors = shortcutErrors.filter(error => !error.startsWith('Global push-to-talk:')); }
+      else { helper = started; helper.configure(recording ? null : parseShortcut(settings.pttShortcut, { bare: true })); shortcutErrors = shortcutErrors.filter(error => !error.startsWith('Global push-to-talk:')); }
     } catch (error) { if (generation === helperGeneration) shortcutErrors.push(`Global push-to-talk: ${error.message}`); }
     finally { helperStarting = undefined; broadcast(); if (generation !== helperGeneration && !quitting && voice.connected && voice.pushToTalk && !helper) void syncHelper(); }
   };
@@ -109,7 +121,7 @@ function createDesktopRuntime({ app, Tray, Menu, nativeImage, globalShortcut, ge
     const failures = registerShortcuts(next);
     if (failures.length) { registerShortcuts(settings); throw new Error(failures.join('; ')); }
     try {
-      if (process.platform === 'win32' && next.startAtLogin !== settings.startAtLogin) app.setLoginItemSettings({ openAtLogin: next.startAtLogin, path: process.execPath, args: [...(app.isPackaged ? [] : [app.getAppPath()]), '--startup'] });
+      if (process.platform === 'win32' && next.startAtLogin !== settings.startAtLogin) app.setLoginItemSettings({ openAtLogin: next.startAtLogin, path: process.execPath, args: [...(app.isPackaged ? [] : [app.getAppPath()]), ...(process.argv.includes('--local-mode') ? ['--local-mode'] : []), '--startup'] });
       fs.mkdirSync(app.getPath('userData'), { recursive: true });
       const temporary = `${settingsFile}.tmp`;
       fs.writeFileSync(temporary, JSON.stringify(next, null, 2));
@@ -149,7 +161,7 @@ function createDesktopRuntime({ app, Tray, Menu, nativeImage, globalShortcut, ge
   ensureTray();
   return {
     snapshot, apply, attachWindow, restore, quit, setRecording,
-    releasePtt: () => { send({ action: 'ptt', pressed: false }); helper?.configure(recording ? null : parseShortcut(settings.pttShortcut)); },
+    releasePtt: () => { send({ action: 'ptt', pressed: false }); helper?.configure(recording ? null : parseShortcut(settings.pttShortcut, { bare: true })); },
     startHidden: () => process.argv.includes('--startup') && settings.startMinimized && (settings.closeToTray || settings.minimizeToTray),
     setVoiceState: next => { const previous = voice; voice = { ...voice }; for (const key of Object.keys(voice)) if (typeof next?.[key] === 'boolean') voice[key] = next[key]; updateTray(); if (previous.connected !== voice.connected || previous.pushToTalk !== voice.pushToTalk) void syncHelper(); },
     beforeQuit: () => { quitting = true; helperGeneration++; helper?.stop(); helper = undefined; globalShortcut.unregisterAll(); tray?.destroy(); tray = undefined; }

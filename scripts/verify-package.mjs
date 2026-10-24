@@ -20,7 +20,7 @@ const bundle = path.dirname(executable);
 const packagedApp = path.join(bundle, 'resources', 'app');
 const metadata = JSON.parse(await readFile(path.join(bundle, 'PACKAGE-INFO.json'), 'utf8'));
 const digest = contents => createHash('sha256').update(contents).digest('hex');
-const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !['path', 'haven_node', 'haven_profile_dir', 'electron_run_as_node'].includes(key.toLowerCase())));
+const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !['path', 'haven_node', 'haven_profile_dir', 'haven_server', 'electron_run_as_node'].includes(key.toLowerCase())));
 assert.equal(Object.keys(environment).some(key => key.toLowerCase() === 'path'), false);
 assert.equal(Object.keys(environment).some(key => key.toLowerCase() === 'haven_node'), false);
 const profile = await mkdtemp(path.join(tmpdir(), 'haven-package-'));
@@ -47,7 +47,7 @@ async function files(directory) {
   return found;
 }
 async function launch(executablePath = executable, expectedVersion = metadata.version) {
-  const app = await electron.launch({ executablePath, args: [], env: { ...environment, HAVEN_PROFILE_DIR: profile } });
+  const app = await electron.launch({ executablePath, args: ['--local-mode'], env: { ...environment, HAVEN_PROFILE_DIR: profile } });
   mainErrorChecks.push(await watchElectronErrors(app));
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
@@ -56,6 +56,9 @@ async function launch(executablePath = executable, expectedVersion = metadata.ve
   return { app, page };
 }
 async function createOwner(page) {
+  // Current clients open Sign in; older upgrade fixtures may open registration.
+  await page.getByLabel('PASSWORD', { exact: true }).waitFor();
+  if (!await page.getByLabel('DISPLAY NAME', { exact: true }).isVisible()) await page.getByRole('button', { name: 'Join Haven', exact: true }).click();
   await page.getByLabel('DISPLAY NAME', { exact: true }).fill('Packaged Account A');
   await page.getByLabel('USERNAME', { exact: true }).fill('packagedaccounta');
   await page.getByLabel('PASSWORD', { exact: true }).fill(password);

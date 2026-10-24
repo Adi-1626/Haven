@@ -36,6 +36,16 @@ if (process.argv.includes('--hosted')) {
   process.env.HAVEN_MODE = 'hosted';
 }
 
+// Explicit Local Mode (the desktop's private backend) never reaches the Hosted database or Storage.
+// A stray Hosted setting is a configuration error, not a reason to switch databases.
+if (process.env.HAVEN_MODE === 'local') {
+  const hostedSettings = ['DATABASE_URL', 'SUPABASE_DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_KEY'].filter(name => process.env[name]);
+  if (hostedSettings.length) {
+    console.error(`FATAL: Local Mode uses only its own SQLite data, but Hosted settings are present: ${hostedSettings.join(', ')}. Remove them or run Hosted Mode instead.`);
+    process.exit(1);
+  }
+}
+
 const port = Number(process.env.PORT ?? 3001);
 const host = process.env.HOST ?? (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 const origins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000')
@@ -88,13 +98,24 @@ const instance = createApp({
   staticDir: process.env.STATIC_DIR,
 });
 
-if (instance.adapter.isPostgres && typeof (instance.adapter as any).checkConnection === 'function') {
-  try {
-    await (instance.adapter as any).checkConnection();
-    console.log('Haven PostgreSQL connection verified successfully.');
-  } catch (error) {
-    console.error('FATAL: Failed to connect to PostgreSQL database in hosted mode:', error instanceof Error ? error.message : error);
-    process.exit(1);
+if (instance.adapter.isPostgres) {
+  // A transient pooler/DNS failure during a deploy should not crash-loop the service; a persistent
+  // misconfiguration (bad credentials, TLS) still exits after the bounded retries.
+  const attempts = 5;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await instance.adapter.checkConnection();
+      console.log('Haven PostgreSQL connection verified successfully.');
+      break;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (attempt >= attempts) {
+        console.error('FATAL: Failed to connect to PostgreSQL database in hosted mode:', message);
+        process.exit(1);
+      }
+      console.warn(`PostgreSQL connection attempt ${attempt}/${attempts} failed: ${message}. Retrying.`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+    }
   }
 }
 
@@ -103,8 +124,16 @@ instance.httpServer.listen(port, host, () => {
 });
 
 
+let shuttingDown = false;
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
-    void instance.close().then(() => process.exit(0));
+    if (shuttingDown) return;
+    shuttingDown = true;
+    // Bounded: a hung database or client must not block the platform's restart indefinitely.
+    setTimeout(() => { console.error('Graceful shutdown timed out; exiting.'); process.exit(1); }, 15_000).unref();
+    instance.close().then(() => process.exit(0), error => {
+      console.error('Graceful shutdown failed:', error instanceof Error ? error.message : error);
+      process.exit(1);
+    });
   });
 }

@@ -9,7 +9,7 @@ export function createVideoPlayback(element: HTMLVideoElement, stream: MediaStre
   let generation = 0;
   const doc = element.ownerDocument;
   const fullscreen = () => doc.fullscreenElement === element || !!doc.fullscreenElement?.contains(element);
-  const wanted = () => !disposed && active && (visible || fullscreen());
+  const wanted = () => !disposed && (doc.pictureInPictureElement === element || (active && (visible || fullscreen())));
   const detach = () => {
     generation++;
     element.pause();
@@ -42,6 +42,8 @@ export function createVideoPlayback(element: HTMLVideoElement, stream: MediaStre
   }) : undefined;
   observer?.observe(element);
   doc.addEventListener('fullscreenchange', update);
+  element.addEventListener('enterpictureinpicture', update);
+  element.addEventListener('leavepictureinpicture', update);
   update();
   return {
     play,
@@ -51,6 +53,8 @@ export function createVideoPlayback(element: HTMLVideoElement, stream: MediaStre
       disposed = true;
       observer?.disconnect();
       doc.removeEventListener('fullscreenchange', update);
+      element.removeEventListener('enterpictureinpicture', update);
+      element.removeEventListener('leavepictureinpicture', update);
       detach();
     },
   };

@@ -34,6 +34,18 @@ test('push to talk combinations match exact modifiers and configurable physical 
   assert.equal(releasesShortcut({ code: 'KeyV', key: 'v' }, 'Control+Shift+V'), true);
   assert.equal(matchesShortcut({ ...event, code: 'ArrowLeft', key: 'ArrowLeft' }, 'Control+Shift+Left'), true);
   assert.equal(releasesShortcut({ code: 'ArrowLeft', key: 'ArrowLeft' }, 'Control+Shift+Left'), true);
+  const bare = { code: 'Backquote', key: '²', ctrlKey: false, shiftKey: false, altKey: false, metaKey: false };
+  assert.equal(matchesShortcut(bare, 'Backquote'), true, 'physical Backquote matches whatever character the layout prints');
+  assert.equal(matchesShortcut({ ...bare, code: 'KeyZ', key: '`' }, 'Backquote'), false, 'a layout character on another physical key must not match');
+  assert.equal(matchesShortcut({ ...bare, shiftKey: true }, 'Backquote'), false);
+  assert.equal(releasesShortcut({ code: 'Backquote', key: '`' }, 'Backquote'), true);
+  assert.equal(matchesShortcut({ ...bare, code: 'Numpad0', key: '0' }, 'Numpad0'), true);
+  assert.equal(matchesShortcut({ ...bare, code: 'Digit0', key: '0' }, 'Numpad0'), false);
+  const rightControl = { ...bare, code: 'ControlRight', key: 'Control', ctrlKey: true };
+  assert.equal(matchesShortcut(rightControl, 'ControlRight'), true);
+  assert.equal(matchesShortcut({ ...rightControl, code: 'ControlLeft' }, 'ControlRight'), false);
+  assert.equal(releasesShortcut({ code: 'ControlRight', key: 'Control' }, 'ControlRight'), true);
+  assert.equal(releasesShortcut({ code: 'ControlLeft', key: 'Control' }, 'ControlRight'), false);
 });
 
 test('device removal falls back only when an explicitly selected device is missing', () => {

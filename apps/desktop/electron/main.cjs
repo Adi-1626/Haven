@@ -3,6 +3,8 @@ const { createDesktopRuntime } = require('./desktop-runtime.cjs');
 const { createClientSettings } = require('./client-settings.cjs');
 const { permissionAllowed } = require('./permissions.cjs');
 const { liveWindowContents, trustedClientEvent } = require('./client-access.cjs');
+const { createAuthVault } = require('./auth-vault.cjs');
+const { validateReleaseConfig, selectConnection } = require('./release-config.cjs');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -15,6 +17,7 @@ let picker;
 let capturePending;
 let permittedSources = new Map();
 let origin;
+let backendOrigin;
 let captureAudioRequested = false;
 const clients = new Set();
 let captureOwner;
@@ -24,6 +27,7 @@ app.setName('Haven');
 const profileArg = process.argv.find(argument => argument.startsWith('--profile='))?.slice(10);
 const profileDir = process.env.HAVEN_PROFILE_DIR || profileArg;
 if (profileDir) app.setPath('userData', path.resolve(profileDir));
+else if (process.argv.includes('--local-mode')) app.setPath('userData', path.join(app.getPath('appData'), 'Haven Local'));
 
 async function availablePort() {
   return new Promise((resolve, reject) => { const server = net.createServer(); server.on('error', reject); server.listen(0, '127.0.0.1', () => { const port = server.address().port; server.close(() => resolve(port)); }); });
@@ -52,6 +56,16 @@ function connectionAddress(address) {
   if (url.username || url.password || url.search || url.hash || (url.pathname !== '/' && !/^\/invite\/[A-Za-z0-9_-]+\/?$/.test(url.pathname))) throw new Error('Use a server URL or a full /invite/code invitation link');
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) throw new Error('Use HTTPS, or HTTP on this computer’s localhost');
   return url;
+}
+
+async function rendererAddress(backend) {
+  // Trust only the frontend explicitly advertised by the selected backend. Redirects
+  // themselves never expand the native bridge allowlist.
+  try {
+    const response = await fetch(`${backend}/api/config`, { signal: AbortSignal.timeout(8000), redirect: 'error' });
+    const config = response.ok ? await response.json() : null;
+    return config?.publicUrl ? connectionAddress(config.publicUrl).origin : backend;
+  } catch { return backend; }
 }
 
 function trusted(webContents) {
@@ -93,11 +107,11 @@ function findBackendEntry() {
 
 function findIconPath() {
   const candidates = [
-    path.join(__dirname, '..', 'public', 'haven.svg'),
-    path.join(__dirname, '..', '..', 'web', 'public', 'haven.svg'),
-    path.join(__dirname, '..', '..', '..', 'public', 'haven.svg'),
+    path.join(__dirname, '..', 'public', 'haven.ico'),
+    path.join(__dirname, '..', '..', 'web', 'public', 'haven.ico'),
+    path.join(__dirname, '..', '..', '..', 'public', 'haven.ico'),
   ];
-  return candidates.find(candidate => fs.existsSync(candidate)) || path.join(__dirname, '..', 'public', 'haven.svg');
+  return candidates.find(candidate => fs.existsSync(candidate)) || path.join(__dirname, '..', 'public', 'haven.ico');
 }
 
 function createClient(partition) {
@@ -110,6 +124,7 @@ function createClient(partition) {
     return { action: 'deny' };
   });
   client.webContents.on('will-navigate', (event, url) => { try { if (new URL(url).origin !== origin) event.preventDefault(); } catch { event.preventDefault(); } });
+  client.webContents.on('will-redirect', (event, url) => { try { if (new URL(url).origin !== origin) event.preventDefault(); } catch { event.preventDefault(); } });
   const contents = client.webContents;
   const clientSession = contents.session;
   const cancelCapture = () => { if (captureOwner === contents) captureComplete(null); };
@@ -124,13 +139,17 @@ async function start() {
   const connectionFile = path.join(app.getPath('userData'), 'connection.json');
   let savedServer;
   try { savedServer = JSON.parse(fs.readFileSync(connectionFile, 'utf8')).server; } catch {}
-  const remote = process.argv.find(argument => argument.startsWith('--server='))?.slice(9) || process.env.HAVEN_SERVER || savedServer;
+  // Source development remains Local Mode. Distributed builds must carry validated public defaults.
+  const release = app.isPackaged ? validateReleaseConfig(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'release-config.json'), 'utf8'))) : undefined;
+  const { remote, webUrl } = selectConnection({ args: process.argv, env: process.env, savedServer, release });
   const dev = process.argv.includes('--dev');
+  if (!dev && process.env.NODE_ENV !== 'development') Menu.setApplicationMenu(null);
   let target;
   if (remote) {
     const url = connectionAddress(remote);
-    origin = url.origin;
-    target = url.href;
+    backendOrigin = url.origin;
+    origin = webUrl || await rendererAddress(backendOrigin);
+    target = new URL(url.pathname, origin).href;
   } else if (dev) origin = 'http://127.0.0.1:5173';
   else {
     const entry = findBackendEntry();
@@ -141,7 +160,10 @@ async function start() {
     const backendCwd = path.dirname(path.dirname(entry));
     const dataDir = path.join(app.getPath('userData'), 'server');
     fs.mkdirSync(dataDir, { recursive: true });
-    backend = spawn(process.env.HAVEN_NODE || (fs.existsSync(bundledNode) ? bundledNode : 'node'), [entry], { cwd: backendCwd, env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, SERVE_STATIC: 'true' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    // Local Mode is private SQLite on this PC: never let Hosted database/Supabase settings from the shell reach it.
+    const localEnv = { ...process.env, HAVEN_MODE: 'local', PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, SERVE_STATIC: 'true' };
+    for (const key of Object.keys(localEnv)) if (/SUPABASE|DATABASE_URL|HAVEN_ENV_FILE/.test(key)) delete localEnv[key];
+    backend = spawn(process.env.HAVEN_NODE || (fs.existsSync(bundledNode) ? bundledNode : 'node'), [entry], { cwd: backendCwd, env: localEnv, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let startupError = '';
     backend.stderr.on('data', chunk => { startupError = (startupError + chunk).slice(-3000); });
     backend.on('error', error => { startupError = error.message; });
@@ -153,6 +175,7 @@ async function start() {
     }
     if (!ready) throw new Error(`Local server failed to start. ${startupError}`);
   }
+  backendOrigin ||= origin;
   ipcMain.handle('capture:sources', event => {
     if (event.sender !== liveWindowContents(picker)) return [];
     return [...permittedSources.values()].map(source => ({ id: source.id, name: source.name, thumbnail: source.thumbnail.toDataURL(), display: source.id.startsWith('screen:') }));
@@ -167,19 +190,23 @@ async function start() {
     const health = await response.json().catch(() => null);
     if (!response.ok || health?.ok !== true) throw new Error('That address does not appear to be a running Haven backend');
     const previousOrigin = origin;
+    const previousBackend = backendOrigin;
+    const nextOrigin = await rendererAddress(url.origin);
     captureComplete(null);
     if (!trustedClientEvent(event, trusted, window, true)) throw new Error('The Haven window closed while checking the backend');
     for (const contents of clients) if (!contents.isDestroyed() && contents !== liveWindowContents(window)) BrowserWindow.fromWebContents(contents)?.close();
-    origin = url.origin;
-    try { await window.loadURL(url.href); }
-    catch (error) { origin = previousOrigin; await window.loadURL(previousOrigin); throw error; }
+    backendOrigin = url.origin;
+    origin = nextOrigin;
+    try { await window.loadURL(new URL(url.pathname, origin).href); }
+    catch (error) { origin = previousOrigin; backendOrigin = previousBackend; await window.loadURL(previousOrigin); throw error; }
     fs.mkdirSync(app.getPath('userData'), { recursive: true });
     fs.writeFileSync(connectionFile, JSON.stringify({ server: url.origin }));
   });
   const assertClient = event => { if (!trustedClientEvent(event, trusted, window)) throw new Error('Invalid client request'); };
+  ipcMain.on('server:api-origin', event => { event.returnValue = trustedClientEvent(event, trusted, window) ? backendOrigin : null; });
   ipcMain.handle('server:current', event => {
     assertClient(event);
-    return { url: origin, local: ['localhost', '127.0.0.1', '[::1]'].includes(new URL(origin).hostname) };
+    return { url: backendOrigin, local: ['localhost', '127.0.0.1', '[::1]'].includes(new URL(backendOrigin).hostname) };
   });
   ipcMain.handle('client:browser', async event => { assertClient(event); await shell.openExternal(origin); });
   ipcMain.handle('client:test', async event => {
@@ -188,7 +215,7 @@ async function start() {
     const client = createClient(`haven-test-${randomUUID()}`);
     try { await client.loadURL(origin); } catch (error) { client.close(); throw error; }
   });
-  desktop = createDesktopRuntime({ app, Tray, Menu, nativeImage, globalShortcut, getWindow: () => window, getClients: () => clients, onQuit: () => captureComplete(null) });
+  desktop = createDesktopRuntime({ app, Tray, Menu, nativeImage, iconPath: findIconPath(), globalShortcut, getWindow: () => window, getClients: () => clients, onQuit: () => captureComplete(null) });
   for (const event of ['suspend', 'resume', 'lock-screen', 'unlock-screen']) powerMonitor.on(event, () => desktop.releasePtt());
   ipcMain.handle('desktop:settings', event => { assertClient(event); return desktop.snapshot(event.sender); });
   ipcMain.handle('desktop:shortcut-recording', async (event, active) => {
@@ -215,47 +242,19 @@ async function start() {
   ipcMain.on('desktop:client-setting-status', (event, key) => {
     event.returnValue = trustedClientEvent(event, trusted, window, true) ? clientSettings.status(key) : { value: null, error: null, canPersist: false };
   });
-  const authFile = path.join(app.getPath('userData'), 'auth-session.enc');
+  const authVault = createAuthVault(app.getPath('userData'), safeStorage);
+  const authScope = () => JSON.stringify([backendOrigin, origin]);
   ipcMain.handle('desktop:auth:store-session', (event, sessionJson) => {
     assertClient(event);
-    if (typeof sessionJson !== 'string') throw new Error('Invalid session payload');
-    try {
-      const encrypted = (safeStorage && typeof safeStorage.isEncryptionAvailable === 'function' && safeStorage.isEncryptionAvailable())
-        ? safeStorage.encryptString(sessionJson)
-        : Buffer.from(sessionJson, 'utf8');
-      fs.writeFileSync(authFile, encrypted);
-      return true;
-    } catch (e) {
-      console.warn('Failed to store encrypted session:', e?.message);
-      return false;
-    }
+    return authVault.write(event.sender, authScope(), event.sender === liveWindowContents(window), sessionJson);
   });
   ipcMain.handle('desktop:auth:get-session', event => {
     assertClient(event);
-    try {
-      if (!fs.existsSync(authFile)) return null;
-      const buffer = fs.readFileSync(authFile);
-      if (safeStorage && typeof safeStorage.isEncryptionAvailable === 'function' && safeStorage.isEncryptionAvailable()) {
-        try {
-          return safeStorage.decryptString(buffer);
-        } catch {
-          return buffer.toString('utf8');
-        }
-      }
-      return buffer.toString('utf8');
-    } catch (e) {
-      console.warn('Failed to decrypt session:', e?.message);
-      return null;
-    }
+    return authVault.read(event.sender, authScope(), event.sender === liveWindowContents(window));
   });
   ipcMain.handle('desktop:auth:clear-session', event => {
     assertClient(event);
-    try {
-      if (fs.existsSync(authFile)) fs.unlinkSync(authFile);
-      return true;
-    } catch {
-      return false;
-    }
+    return authVault.clear(event.sender, authScope(), event.sender === liveWindowContents(window));
   });
   ipcMain.handle('desktop:clipboard:write', (event, text) => {
     assertClient(event);

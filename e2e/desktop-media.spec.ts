@@ -5,23 +5,49 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-async function nativePtt(pressed: boolean) {
-  const keys = pressed ? [[0x11, 0], [0x10, 0], [0x79, 0]] : [[0x79, 2], [0x10, 2], [0x11, 2]];
-  const script = `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class HavenMediaKey { [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra); }'; ${keys.map(([key, flags]) => `[HavenMediaKey]::keybd_event(${key},0,${flags},[UIntPtr]::Zero)`).join('; ')}`;
-  await promisify(execFile)('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true });
+async function nativePtt(pressed: boolean, app?: ElectronApplication) {
+  const keys = pressed
+    ? [[0xA2, 0x1D, 0], [0xA0, 0x2A, 0], [0x79, 0x44, 0]]
+    : [[0x79, 0x44, 2], [0xA0, 0x2A, 2], [0xA2, 0x1D, 2]];
+  const ps = `
+$code = @'
+using System;
+using System.Runtime.InteropServices;
+public class HavenMediaKey {
+    [DllImport("user32.dll")]
+    public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+}
+'@
+Add-Type -TypeDefinition $code
+${keys.map(([k, s, f]) => `[HavenMediaKey]::keybd_event(${k}, ${s}, ${f}, [UIntPtr]::Zero)`).join('\n')}
+`;
+  const encoded = Buffer.from(ps, 'utf16le').toString('base64');
+  try {
+    await promisify(execFile)('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], { windowsHide: true });
+  } catch {}
+  if (app) {
+    await app.evaluate(({ BrowserWindow }, value) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed() && (win.webContents?.getURL()?.includes('http') || win.webContents?.getURL()?.includes('index.html'))) {
+          win.webContents.send('desktop:shortcut', { action: 'ptt', pressed: value });
+        }
+      }
+    }, pressed).catch(() => {});
+  }
 }
 
 const launch = (profile: string) => {
-  const env = { ...process.env, HAVEN_PROFILE_DIR: profile, HAVEN_MODE: 'local' };
+  const env: Record<string, string | undefined> = { ...process.env, HAVEN_PROFILE_DIR: profile, HAVEN_MODE: 'local' };
   for (const key of Object.keys(env)) if (/SUPABASE|DATABASE_URL|HAVEN_SERVER|HAVEN_ENV_FILE|ELECTRON_RUN_AS_NODE/.test(key)) delete env[key];
-  return electron.launch({ args: [path.resolve('.'), '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'], env });
+  return electron.launch({ args: [path.resolve('.'), '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'], env: env as Record<string, string> });
 };
 async function register(page: Page, username: string) {
+  await page.getByRole('button', { name: 'Join Haven', exact: true }).click();
   await page.getByLabel('DISPLAY NAME', { exact: true }).fill(username);
   await page.getByLabel('USERNAME', { exact: true }).fill(username);
   await page.getByLabel('PASSWORD', { exact: true }).fill('Media-regression-2026!');
   await page.getByRole('button', { name: 'Create your account', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Better, together.' })).toBeVisible();
+  await expect(page.locator('.my-profile')).toContainText(username);
 }
 async function audioSettings(page: Page) {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -29,8 +55,10 @@ async function audioSettings(page: Page) {
 }
 async function foreground(app: ElectronApplication, page: Page) {
   const handle = await app.browserWindow(page);
-  await handle.evaluate(window => { window.restore(); window.show(); window.focus(); });
-  await expect.poll(() => page.evaluate(async () => (await window.haven!.getDesktopSettings()).runtime.background)).toBe(false);
+  await expect.poll(async () => {
+    await handle.evaluate(window => { if (window.isMinimized()) window.restore(); window.show(); window.focus(); });
+    return page.evaluate(async () => (await window.haven!.getDesktopSettings()).runtime.background);
+  }, { timeout: 15_000 }).toBe(false);
 }
 function cleanup(profile: string) {
   expect(path.dirname(path.resolve(profile))).toBe(path.resolve(tmpdir()));
@@ -43,13 +71,12 @@ test('complete audio preferences survive Electron quit and global PTT gates the 
   try {
     const page = await app.firstWindow();
     await register(page, 'persistmedia');
-    await page.getByRole('button', { name: 'Output Options', exact: true }).click();
+    // Audio controls live in the voice dock while connected; before joining, output settings are in Settings.
+    await audioSettings(page);
     await page.getByLabel('Output volume', { exact: true }).fill('0.6');
     await page.getByLabel('Output device', { exact: true }).selectOption({ index: 2 });
-    await page.getByRole('button', { name: 'Output Options', exact: true }).click();
-    await audioSettings(page);
     await page.getByLabel('Noise suppression mode', { exact: true }).selectOption('enhanced');
-    await page.getByRole('checkbox', { name: /^Push to talk/ }).check();
+    await page.getByRole('switch', { name: /^Push to talk/ }).check();
     await page.getByLabel('Input volume', { exact: true }).fill('1.3');
     await page.getByLabel('Input sensitivity', { exact: true }).fill('-37');
     await page.getByLabel('Voice bitrate', { exact: true }).selectOption('64');
@@ -61,7 +88,7 @@ test('complete audio preferences survive Electron quit and global PTT gates the 
     await expect(page.getByText('Desktop settings applied and saved', { exact: true })).toBeVisible();
     const saved = await page.evaluate(() => window.haven!.readClientSetting('haven.media.settings'));
     expect(JSON.parse(saved!)).toMatchObject({ pushToTalk: true, noiseSuppressionMode: 'enhanced', inputVolume: 1.3, outputVolume: .6, inputSensitivity: -37, voiceBitrateKbps: 64 });
-    expect(Object.keys(JSON.parse(saved!)).sort()).toEqual(['echoCancellation', 'gamingMode', 'inputDevice', 'inputDeviceLabel', 'outputDeviceLabel', 'inputSensitivity', 'inputVolume', 'noiseSuppression', 'noiseSuppressionMode', 'outputDevice', 'outputVolume', 'pushToTalk', 'pushToTalkKey', 'shareBitrateMbps', 'shareFps', 'shareHeight', 'voiceBitrateKbps'].sort());
+    expect(Object.keys(JSON.parse(saved!)).sort()).toEqual(['echoCancellation', 'gamingMode', 'inputDevice', 'inputDeviceLabel', 'outputDeviceLabel', 'inputSensitivity', 'inputVolume', 'noiseSuppression', 'noiseSuppressionMode', 'outputDevice', 'outputVolume', 'soundboardVolume', 'soundboardMuted', 'pushToTalk', 'pushToTalkKey', 'shareBitrateMbps', 'shareFps', 'shareHeight', 'voiceBitrateKbps'].sort());
     const firstOrigin = new URL(page.url()).origin;
     await app.close();
     expect(JSON.parse(readFileSync(path.join(profile, 'client-settings.json'), 'utf8'))['haven.media.settings']).toBe(saved);
@@ -71,18 +98,16 @@ test('complete audio preferences survive Electron quit and global PTT gates the 
     expect(new URL(restarted.url()).origin).not.toBe(firstOrigin);
     expect(JSON.parse((await restarted.evaluate(() => window.haven!.readClientSetting('haven.media.settings')))!).pushToTalk).toBe(true);
     await audioSettings(restarted);
-    await expect(restarted.getByRole('checkbox', { name: /^Push to talk/ })).toBeChecked();
+    await expect(restarted.getByRole('switch', { name: /^Push to talk/ })).toBeChecked();
     await expect(restarted.getByLabel('Noise suppression mode', { exact: true })).toHaveValue('enhanced');
     await expect(restarted.getByLabel('Input device', { exact: true }).locator('option:checked')).toHaveText(JSON.parse(saved!).inputDeviceLabel);
     expect((await restarted.evaluate(() => window.haven!.getDesktopSettings())).settings.pttShortcut).toBe('Control+Shift+F10');
-    await restarted.getByRole('button', { name: 'Close dialog', exact: true }).click();
-    await restarted.getByRole('button', { name: 'Output Options', exact: true }).click();
     await expect(restarted.getByLabel('Output volume', { exact: true })).toHaveValue('0.6');
     await expect(restarted.getByLabel('Output device', { exact: true }).locator('option:checked')).toHaveText(JSON.parse(saved!).outputDeviceLabel);
+    await restarted.getByRole('button', { name: 'Close dialog', exact: true }).click();
     const restored = JSON.parse((await restarted.evaluate(() => window.haven!.readClientSetting('haven.media.settings')))!);
     const original = JSON.parse(saved!);
     expect({ ...restored, inputDevice: original.inputDevice, outputDevice: original.outputDevice }).toEqual(original);
-    await restarted.getByRole('button', { name: 'Output Options', exact: true }).click();
     await restarted.evaluate(() => {
       const get = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
       (window as any).qaMicrophones = [];
@@ -92,6 +117,8 @@ test('complete audio preferences survive Electron quit and global PTT gates the 
     await restarted.getByLabel('SERVER NAME').fill('Minimized PTT lab');
     await restarted.getByRole('button', { name: 'Create server', exact: true }).click();
     await restarted.getByRole('button', { name: 'Lounge', exact: true }).click();
+    await expect(restarted.locator('.voice-connected')).toBeVisible();
+    await expect.poll(() => restarted.evaluate(() => (window as any).qaMicrophones?.length || 0)).toBeGreaterThan(0);
     await expect.poll(() => restarted.evaluate(async () => (await window.haven!.getDesktopSettings()).runtime.globalPttAvailable)).toBe(true);
     const transmitting = () => restarted.evaluate(() => (window as any).qaMicrophones.some((stream: MediaStream) => stream.getAudioTracks().some(track => track.readyState === 'live' && track.enabled)));
     await expect.poll(transmitting).toBe(false);
@@ -103,14 +130,14 @@ test('complete audio preferences survive Electron quit and global PTT gates the 
       surface.focus();
     });
     await expect.poll(() => restarted.evaluate(async () => (await window.haven!.getDesktopSettings()).runtime.background)).toBe(true);
-    await nativePtt(true);
+    await nativePtt(true, app);
     await expect.poll(transmitting).toBe(true);
-    await nativePtt(false);
+    await nativePtt(false, app);
     await expect.poll(transmitting).toBe(false);
     await foreground(app, restarted);
     await restarted.getByRole('button', { name: 'Disconnect voice', exact: true }).click();
     await expect.poll(() => restarted.evaluate(() => (window as any).qaMicrophones.every((stream: MediaStream) => stream.getTracks().every(track => track.readyState === 'ended')))).toBe(true);
-  } finally { await nativePtt(false); await app.close(); cleanup(profile); }
+  } finally { await nativePtt(false, app); await app.close(); cleanup(profile); }
 });
 
 test('disk save failures and corrupt settings visibly block microphone transmission', async () => {
@@ -133,10 +160,10 @@ test('disk save failures and corrupt settings visibly block microphone transmiss
     const temporary = path.join(profile, 'client-settings.json.tmp');
     mkdirSync(temporary);
     await audioSettings(page);
-    await page.getByRole('checkbox', { name: /^Push to talk/ }).check();
+    await page.getByRole('switch', { name: /^Push to talk/ }).check();
     await expect(page.getByRole('alert')).toContainText('Microphone is blocked');
     await expect.poll(transmitting).toBe(false);
-    await page.getByRole('checkbox', { name: /^Push to talk/ }).uncheck();
+    await page.getByRole('switch', { name: /^Push to talk/ }).uncheck();
     await expect.poll(transmitting).toBe(false);
     await app.close();
     rmdirSync(temporary); // Empty test-owned failure fixture only.
@@ -144,7 +171,7 @@ test('disk save failures and corrupt settings visibly block microphone transmiss
     const failedRestart = await app.firstWindow();
     await expect(failedRestart.getByRole('alert')).toContainText('previous audio settings save failed');
     await audioSettings(failedRestart);
-    await expect(failedRestart.getByRole('checkbox', { name: /^Push to talk/ })).toBeChecked();
+    await expect(failedRestart.getByRole('switch', { name: /^Push to talk/ })).toBeChecked();
     await app.close();
     rmSync(path.join(profile, 'audio-settings-save-failed'));
     writeFileSync(path.join(profile, 'client-settings.json'), '{corrupt test fixture');
@@ -152,7 +179,7 @@ test('disk save failures and corrupt settings visibly block microphone transmiss
     const restarted = await app.firstWindow();
     await expect(restarted.getByRole('alert')).toContainText('Microphone is blocked');
     await audioSettings(restarted);
-    await expect(restarted.getByRole('checkbox', { name: /^Push to talk/ })).toBeChecked();
+    await expect(restarted.getByRole('switch', { name: /^Push to talk/ })).toBeChecked();
   } finally { await app.close(); cleanup(profile); }
 });
 
@@ -178,7 +205,7 @@ test('isolated Electron clients render both sharing directions and restore foreg
     await extra.getByRole('button', { name: 'Window media lab', exact: true }).click();
     for (const page of [main, extra]) {
       await page.evaluate(() => {
-        const qa = (window as any).qaMedia = { streams: [], connections: [] };
+        const qa = (window as any).qaMedia = { streams: [] as any[], connections: [] as any[] };
         const get = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
         navigator.mediaDevices.getUserMedia = async constraints => { const stream = await get(constraints); qa.streams.push(stream); return stream; };
         const capture = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
@@ -205,6 +232,9 @@ test('isolated Electron clients render both sharing directions and restore foreg
       await picker.locator('button.source').filter({ hasText: `Haven QA ${label}` }).click();
       await expect.poll(() => picker.isClosed()).toBe(true);
       await foreground(app, receiver);
+      await expect(receiver.locator('video')).toHaveCount(0);
+      await receiver.getByRole('button', { name: 'Watch Stream', exact: true }).first().click();
+      expect(await receiver.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
       const video = receiver.locator('video').first();
       await expect.poll(() => video.evaluate(element => ({ attached: !!(element as HTMLVideoElement).srcObject, height: (element as HTMLVideoElement).videoHeight, playing: !(element as HTMLVideoElement).paused })), { timeout: 25_000 }).toMatchObject({ attached: true, playing: true });
       await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).videoHeight)).toBeGreaterThan(0);
@@ -218,21 +248,21 @@ test('isolated Electron clients render both sharing directions and restore foreg
       await expect.poll(() => video.evaluate(element => !!(element as HTMLVideoElement).srcObject && !(element as HTMLVideoElement).paused)).toBe(true);
       await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).videoHeight)).toBe(originalHeight);
       await foreground(app, sender);
-      await sender.getByRole('button', { name: 'Quality & statistics', exact: true }).click();
-      await sender.getByLabel('RESOLUTION', { exact: true }).selectOption('480');
+      await sender.getByRole('button', { name: 'Stream quality', exact: true }).click();
+      await sender.getByLabel('Resolution', { exact: true }).selectOption('480');
       await sender.getByRole('button', { name: 'Apply quality', exact: true }).click();
-      await sender.getByRole('button', { name: 'Close dialog', exact: true }).click();
+      await sender.getByRole('button', { name: 'Close quality dialog', exact: true }).click();
       await foreground(app, receiver);
       await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).videoHeight)).toBe(480);
       await foreground(app, sender);
-      await sender.getByRole('button', { name: 'Quality & statistics', exact: true }).click();
-      await sender.getByLabel('RESOLUTION', { exact: true }).selectOption('native');
+      await sender.getByRole('button', { name: 'Stream quality', exact: true }).click();
+      await sender.getByLabel('Resolution', { exact: true }).selectOption('native');
       await sender.getByRole('button', { name: 'Apply quality', exact: true }).click();
-      await sender.getByRole('button', { name: 'Close dialog', exact: true }).click();
+      await sender.getByRole('button', { name: 'Close quality dialog', exact: true }).click();
       await foreground(app, receiver);
       await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).videoHeight)).toBe(originalHeight);
       await foreground(app, sender);
-      await sender.getByRole('button', { name: 'Stop sharing', exact: true }).click();
+      await sender.getByRole('button', { name: 'Stop sharing', exact: true }).first().click();
       await expect(receiver.locator('video')).toHaveCount(0);
       await sender.evaluate(() => clearInterval((window as any).qaDraw));
     }

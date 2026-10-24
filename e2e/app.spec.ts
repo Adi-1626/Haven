@@ -1,11 +1,9 @@
+import { streamStatistics } from './stream-statistics';
 import { test, expect, type Page, type Browser } from '@playwright/test';
+import { registerLocal } from './local-auth';
 
 async function register(page: Page, username: string) {
-  await page.goto('/');
-  await page.getByLabel('DISPLAY NAME').fill(username);
-  await page.getByLabel('USERNAME', { exact: true }).fill(username);
-  await page.getByLabel('PASSWORD', { exact: true }).fill('Haven-Strong-Pass-2026');
-  await page.getByRole('button', { name: 'Create your account' }).click();
+  await registerLocal(page, username);
   await expect(page.getByRole('heading', { name: 'Better, together.' })).toBeVisible();
 }
 
@@ -34,7 +32,6 @@ test('two accounts: invites, realtime chat, replies, reactions, edits, files, fr
   await register(second, guest);
   await second.getByRole('button', { name: 'Join a server', exact: true }).click();
   await second.getByLabel('INVITE CODE').fill(invite);
-  await second.getByRole('button', { name: 'Join server', exact: true }).click();
   await second.getByRole('button', { name: 'Join The observatory', exact: true }).click();
   await expect(second.getByRole('heading', { name: 'Welcome to #general' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Message', exact: true }).fill('A real message across two sessions');
@@ -109,34 +106,39 @@ test('actual WebRTC audio and encoded screen video between independent clients',
   await expect(second.locator('.voice-connected')).toContainText('Voice connected');
   await expect.poll(async () => second.evaluate(async () => { const connections = (window as any).__connections as RTCPeerConnection[]; const stats = await Promise.all(connections.map(connection => connection.getStats())); return stats.flatMap(report => [...report.values()]).filter(item => item.type === 'inbound-rtp' && item.kind === 'audio').reduce((total, item) => total + item.bytesReceived, 0); }), { timeout: 25_000 }).toBeGreaterThan(100);
   await page.getByRole('button', { name: 'Share screen', exact: true }).first().click();
-  await expect(page.locator('.stream-summary')).toContainText('1280 × 720');
+  await expect(page.getByRole('button', { name: 'Stop sharing' }).first()).toBeVisible();
+  // Screen transport is viewer-driven: announcing a broadcast must not start
+  // sending video to every voice participant without their consent.
+  await expect(second.getByRole('button', { name: 'Watch Stream', exact: true })).toBeVisible();
+  await second.getByRole('button', { name: 'Watch Stream', exact: true }).click();
   await expect.poll(async () => second.locator('video').evaluateAll(videos => videos.map(element => ({ width: (element as HTMLVideoElement).videoWidth, height: (element as HTMLVideoElement).videoHeight })).filter(item => item.width > 0)), { timeout: 25_000 }).toEqual([{ width: 1280, height: 720 }]);
-  await page.getByRole('button', { name: 'Quality & statistics' }).click();
-  const resolution = page.getByRole('combobox').first();
+  await page.getByRole('button', { name: 'Stream quality', exact: true }).click();
+  await expect(page.getByText('Captured source: 1280 × 720', { exact: true })).toBeVisible();
+  const resolution = page.getByLabel('Resolution', { exact: true });
   await expect(resolution.locator('option')).toHaveText(['Native · 1280 × 720', '480p']);
   await resolution.selectOption('480');
-  await page.getByRole('combobox').nth(1).selectOption('30');
+  await page.getByLabel('Frame Rate', { exact: true }).selectOption('30');
   await page.getByRole('button', { name: 'Apply quality', exact: true }).click();
-  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
+  await page.getByRole('button', { name: 'Close quality dialog', exact: true }).click();
   await expect.poll(async () => second.locator('video').evaluateAll(videos => videos.map(element => (element as HTMLVideoElement).videoHeight)), { timeout: 20_000 }).toEqual([480]);
   await page.getByRole('button', { name: 'Stream quality', exact: true }).click();
   await page.getByText('Live connection statistics', { exact: true }).click();
-  await expect.poll(async () => { const stats = JSON.parse(await page.locator('.stream-stats pre').textContent() || '{}'); return stats.outbound?.[0]?.fps || 0; }, { timeout: 15_000 }).toBeGreaterThan(0);
-  const stats = JSON.parse(await page.locator('.stream-stats pre').textContent() || '{}');
+  await expect.poll(async () => { const stats = await streamStatistics(page); return stats.outbound?.[0]?.fps || 0; }, { timeout: 15_000 }).toBeGreaterThan(0);
+  const stats = await streamStatistics(page);
   expect(stats.outbound[0].width).toBeLessThanOrEqual(1280);
   expect(stats.outbound[0].height).toBe(480);
-  await expect.poll(async () => JSON.parse(await page.locator('.stream-stats pre').textContent() || '{}').outbound?.[0]?.fps || 60, { timeout: 15_000 }).toBeLessThanOrEqual(31);
-  console.log('30 fps screen sample:', await page.locator('.stream-stats pre').textContent());
-  await page.getByRole('combobox').nth(1).selectOption('15');
+  await expect.poll(async () => (await streamStatistics(page)).outbound?.[0]?.fps || 60, { timeout: 15_000 }).toBeLessThanOrEqual(31);
+  console.log('30 fps screen sample:', await streamStatistics(page));
+  await page.getByLabel('Frame Rate', { exact: true }).selectOption('15');
   await page.getByRole('button', { name: 'Apply quality', exact: true }).click();
-  await expect.poll(async () => JSON.parse(await page.locator('.stream-stats pre').textContent() || '{}').outbound?.[0]?.fps || 60, { timeout: 15_000 }).toBeLessThanOrEqual(16);
-  console.log('15 fps screen sample:', await page.locator('.stream-stats pre').textContent());
-  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
-  await page.locator('.user-panel').getByRole('button', { name: 'Mute microphone', exact: true }).click();
+  await expect.poll(async () => (await streamStatistics(page)).outbound?.[0]?.fps || 60, { timeout: 15_000 }).toBeLessThanOrEqual(16);
+  console.log('15 fps screen sample:', await streamStatistics(page));
+  await page.getByRole('button', { name: 'Close quality dialog', exact: true }).click();
+  await page.locator('.voice-connected').getByRole('button', { name: 'Mute microphone', exact: true }).click();
   const roster = await (await second.request.get('/api/bootstrap')).json();
   await expect.poll(async () => { const data = await (await second.request.get('/api/bootstrap')).json(); return data.voice.find((peer: any) => peer.user.username === `speaker${suffix}`)?.muted; }).toBe(true);
   await page.getByRole('button', { name: 'Disconnect voice', exact: true }).click();
-  await expect(second.locator('.call-header')).toContainText('1 connected');
+  await expect(second.locator('.call-header')).toContainText('Participants (1)');
   await context.close();
 });
 

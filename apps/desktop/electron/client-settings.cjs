@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const schemas = {
-  'haven.media.settings': { inputDevice: 'string', outputDevice: 'string', inputDeviceLabel: 'string', outputDeviceLabel: 'string', pushToTalkKey: 'string', noiseSuppression: 'boolean', noiseSuppressionMode: 'string', echoCancellation: 'boolean', pushToTalk: 'boolean', gamingMode: 'boolean', inputVolume: 'number', outputVolume: 'number', inputSensitivity: 'number', voiceBitrateKbps: 'number', shareHeight: ['string', 'number'], shareFps: 'number', shareBitrateMbps: 'number' },
+  'haven.media.settings': { inputDevice: 'string', outputDevice: 'string', inputDeviceLabel: 'string', outputDeviceLabel: 'string', pushToTalkKey: 'string', noiseSuppression: 'boolean', noiseSuppressionMode: 'string', echoCancellation: 'boolean', pushToTalk: 'boolean', gamingMode: 'boolean', inputVolume: 'number', outputVolume: 'number', soundboardVolume: 'number', soundboardMuted: 'boolean', inputSensitivity: 'number', voiceBitrateKbps: 'number', shareHeight: ['string', 'number'], shareFps: 'number', shareBitrateMbps: 'number' },
   'haven.voice.state': { muted: 'boolean', deafened: 'boolean' },
   'haven.preferences': { animateEmoji: 'boolean', notifications: 'boolean' }
 };
@@ -12,7 +12,7 @@ function validSetting(key, value) {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
     if (!Object.entries(parsed).every(([name, item]) => Object.hasOwn(schemas[key], name) && [schemas[key][name]].flat().includes(typeof item) && (typeof item !== 'string' || item.length <= 512) && (typeof item !== 'number' || Number.isFinite(item)))) return false;
     if (key === 'haven.media.settings') {
-      for (const [name, min, max] of [['inputVolume', 0, 2], ['outputVolume', 0, 1], ['inputSensitivity', -60, -10]]) {
+      for (const [name, min, max] of [['inputVolume', 0, 2], ['outputVolume', 0, 1], ['soundboardVolume', 0, 1], ['inputSensitivity', -60, -10]]) {
         if (name in parsed && !(parsed[name] >= min && parsed[name] <= max)) return false;
       }
       if ('pushToTalkKey' in parsed && !/^(?:(?:Control|Alt|Shift)\+)*(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Space|Enter|Tab|Escape|Backspace|Insert|Delete|Home|End|PageUp|PageDown|(?:Arrow)?(?:Up|Down|Left|Right))$/.test(parsed.pushToTalkKey)) return false;

@@ -9,8 +9,16 @@ export function parseInvitation(input: string, origin: string) {
   try { url = new URL(value); } catch { throw new Error('Enter an invite code or a complete Haven invitation link.'); }
   if (url.username || url.password || (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))) throw new Error('Invitation links require HTTPS, or HTTP on this computer’s localhost.');
   const code = inviteCodeFromPath(url.pathname);
-  if (!code) throw new Error('That is a host address, not a community invitation. Use “Connect to a Haven host”, or ask for a link containing /invite/.');
+  if (!code) throw new Error('That is not a community invitation. Ask for an invitation link or code.');
   return { code, origin: url.origin, url: `${url.origin}/invite/${code}` };
 }
 
 export const isLoopback = (origin: string) => ['localhost', '127.0.0.1', '[::1]'].includes(new URL(origin).hostname);
+
+export function isCurrentInvitation(origin: string, frontendOrigin: string, apiOrigin: string) {
+  return origin === new URL(frontendOrigin).origin || origin === new URL(apiOrigin || frontendOrigin).origin;
+}
+
+export function invitationHost(frontendOrigin: string, configuredPublicUrl?: string) {
+  return (configuredPublicUrl || frontendOrigin).replace(/\/+$/, '');
+}

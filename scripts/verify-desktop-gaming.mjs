@@ -25,7 +25,7 @@ async function nativeKeys(keys) {
   });
 }
 try {
-  instance = await electron.launch({ ...(executablePath ? { executablePath } : {}), args: [...(executablePath ? [] : [root]), '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'], env: { ...process.env, HAVEN_PROFILE_DIR: profile } });
+  instance = await electron.launch({ ...(executablePath ? { executablePath } : {}), args: [...(executablePath ? [] : [root]), '--local-mode', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'], env: { ...process.env, HAVEN_SERVER: '', HAVEN_PROFILE_DIR: profile } });
   mainErrorChecks.push(await watchElectronErrors(instance));
   const main = await instance.firstWindow();
   await main.waitForLoadState('domcontentloaded');
@@ -162,7 +162,7 @@ try {
   await instance.evaluate(({ BrowserWindow }, id) => { for (const window of BrowserWindow.getAllWindows()) if (window.id !== id) window.close(); }, mainId);
   const firstOrigin = new URL(main.url()).origin;
   await instance.close();
-  instance = await electron.launch({ ...(executablePath ? { executablePath } : {}), args: [...(executablePath ? [] : [root]), '--use-fake-device-for-media-stream'], env: { ...process.env, HAVEN_PROFILE_DIR: profile } });
+  instance = await electron.launch({ ...(executablePath ? { executablePath } : {}), args: [...(executablePath ? [] : [root]), '--local-mode', '--use-fake-device-for-media-stream'], env: { ...process.env, HAVEN_SERVER: '', HAVEN_PROFILE_DIR: profile } });
   mainErrorChecks.push(await watchElectronErrors(instance));
   const restarted = await instance.firstWindow(); await restarted.waitForLoadState('domcontentloaded');
   const secondOrigin = new URL(restarted.url()).origin;

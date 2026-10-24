@@ -1,7 +1,8 @@
+import { AuthenticatedImage } from './AuthenticatedImage';
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { customEmojiToken, eligibleEmojiAnimations, emojiCatalog, findAnimatedEmoji, splitEmojiText } from './emoji-data';
 import type { ServerEmoji } from '@haven/shared/types';
-import { resolveApiUrl } from './api';
+
 import './emoji.css';
 
 const EmojiMotion = createContext(true);
@@ -76,7 +77,7 @@ export const Emoji = memo(function Emoji({ value }: { value: string }) {
     if (!motion || (!animated && !custom?.animated) || !element.current) return;
     return observeEmoji(element.current, setActive);
   }, [motion, animated, custom?.animated, custom?.id]);
-  if (custom) return <span ref={element} className={`haven-emoji custom-emoji ${active ? 'is-animated' : ''}`} role="img" aria-label={custom.name} title={`:${custom.name}:`} data-emoji={value}><img src={resolveApiUrl(custom.animated && active ? custom.url : custom.staticUrl)} alt="" decoding="async" draggable={false} /></span>;
+  if (custom) return <span ref={element} className={`haven-emoji custom-emoji ${active ? 'is-animated' : ''}`} role="img" aria-label={custom.name} title={`:${custom.name}:`} data-emoji={value}><AuthenticatedImage src={custom.animated && active ? custom.url : custom.staticUrl} alt="" decoding="async" draggable={false} /></span>;
   if (!animated) return <>{value}</>;
   return <span ref={element} className={`haven-emoji ${active ? 'is-animated' : ''}`} role="img" aria-label={animated.name} title={`:${animated.name.toLowerCase().replaceAll(' ', '_')}:`} data-emoji={value}><svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><g className={`emoji-motion emoji-${animated.animation}`}><EmojiDrawing animation={animated.animation} /></g></svg></span>;
 });

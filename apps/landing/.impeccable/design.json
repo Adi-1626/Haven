@@ -1,0 +1,305 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-24T00:00:00Z",
+  "title": "Design System: Haven",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Haven lavender"
+      },
+      "primary-light": {
+        "role": "primary",
+        "displayName": "Pale lavender"
+      },
+      "on-primary": {
+        "role": "primary",
+        "displayName": "Lavender ink"
+      },
+      "secondary": {
+        "role": "secondary",
+        "displayName": "Living emerald"
+      },
+      "emerald-ink": {
+        "role": "secondary",
+        "displayName": "Emerald ink"
+      },
+      "emerald-hover": {
+        "role": "secondary",
+        "displayName": "Emerald hover"
+      },
+      "world-screen": {
+        "role": "tertiary",
+        "displayName": "Glacial mineral"
+      },
+      "world-start": {
+        "role": "tertiary",
+        "displayName": "Observatory stone"
+      },
+      "surface-lowest": {
+        "role": "neutral",
+        "displayName": "Obsidian ground"
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Quiet surface"
+      },
+      "surface-container-low": {
+        "role": "neutral",
+        "displayName": "Raised surface"
+      },
+      "on-surface": {
+        "role": "neutral",
+        "displayName": "Reading text"
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted text"
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Quiet separator"
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Strong separator"
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Soft exit red"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Atlas display",
+        "purpose": "Base atlas headline; responsive overrides live in DESIGN.md Layout and Typography."
+      },
+      "headline": {
+        "displayName": "Environment headline",
+        "purpose": "Base world story heading with responsive size changes."
+      },
+      "title": {
+        "displayName": "Chat room title",
+        "purpose": "Compact editorial heading inside the Chat demo."
+      },
+      "body": {
+        "displayName": "Global body",
+        "purpose": "Base reading text."
+      },
+      "description": {
+        "displayName": "Environment description",
+        "purpose": "World story supporting copy."
+      },
+      "message": {
+        "displayName": "Message",
+        "purpose": "Final 14px sample message text at every viewport."
+      },
+      "button": {
+        "displayName": "Action",
+        "purpose": "Base 13px medium-weight action controls."
+      }
+    },
+    "shadows": [
+      {
+        "name": "demo-panel",
+        "value": "0 24px 55px -30px #000a",
+        "purpose": "Bounded demo surface."
+      },
+      {
+        "name": "download-dialog",
+        "value": "0 24px 80px #0007",
+        "purpose": "Native Windows availability dialog."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Arrival and satellite interaction easing."
+      },
+      {
+        "name": "arrival",
+        "value": "320ms",
+        "purpose": "translateY(10px) to translateY(0); opacity stays 1."
+      },
+      {
+        "name": "control-transition",
+        "value": "0.2s",
+        "purpose": "Background/border hover changes; screen preview state swaps transition border only."
+      },
+      {
+        "name": "satellite-hover",
+        "value": "0.28s",
+        "purpose": "4px upward lift on hover or focus; removed under reduced motion."
+      },
+      {
+        "name": "water-drift",
+        "value": "12s ease-in-out infinite alternate",
+        "purpose": "translateX(-8px) to translateX(8px), opacity .08 to .24."
+      },
+      {
+        "name": "mote-drift",
+        "value": "9s ease-in-out infinite alternate",
+        "purpose": "translate(0,0) to translate(4px,-8px), opacity .15 to .65."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide-min",
+        "value": "1800px"
+      },
+      {
+        "name": "compact-desktop-max",
+        "value": "1099px"
+      },
+      {
+        "name": "stacked-max",
+        "value": "800px"
+      },
+      {
+        "name": "mobile-max",
+        "value": "540px"
+      },
+      {
+        "name": "small-mobile-max",
+        "value": "360px"
+      }
+    ],
+    "focus": {
+      "outline": "2px solid var(--primary)",
+      "outlineOffset": "5px",
+      "purpose": "Global visible keyboard focus."
+    },
+    "resourcePolicy": {
+      "arrivalOpacity": 1,
+      "ambientGate": "Landscape-specific IntersectionObserver (threshold 0.05), document.hidden, visible motion toggle and prefers-reduced-motion.",
+      "voiceAudio": "Explicit action only; stops on teardown, offscreen observation and hidden document.",
+      "assets": "Original deterministic planets generated offline into transparent WebP; CSS/SVG landscapes; local WOFF2 fonts.",
+      "routes": [
+        "#orbit",
+        "#chat",
+        "#voice",
+        "#screen",
+        "#start"
+      ],
+      "loading": "Four separate React lazy environment modules; bounded loading and error states.",
+      "runtime": "No WebGL, runtime planetary renderer, animation library, requestAnimationFrame loop or new backend."
+    },
+    "provenance": {
+      "sourceFiles": [
+        "src/index.css",
+        "src/landing.css",
+        "src/App.tsx",
+        "src/useMotion.ts",
+        "src/environments/Chat.tsx",
+        "src/environments/Voice.tsx",
+        "src/environments/Screen.tsx",
+        "src/environments/Start.tsx",
+        "PLANETARY-BRIEF.md"
+      ],
+      "tonalRamps": "Omitted: the implementation has no source tonal ramps; no synthetic colors are recorded as implemented tokens.",
+      "validationHandoff": "Reported by the completed implementation review: 39 browser tests plus 3 final Screen tests; 25 actual browser zoom states through 200%; local packaged Electron opened Hosted. Hidden-page handling was simulated because browser automation forces native visibility; OS minimize was not tested.",
+      "screenshots": "output/landing-planetary-20261022/screenshots"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Lavender action for opening Haven or starting a sample preview.",
+      "html": "<button class=\"ds-button ds-primary\">Open Haven</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:20px;min-height:48px;padding:12px 22px;border:1px solid transparent;border-radius:6px;font:500 13px/1.5 Inter,sans-serif;cursor:pointer;transition:background .2s,border-color .2s}.ds-button:focus-visible{outline:2px solid var(--primary,#c0c1ff);outline-offset:5px}.ds-primary{background:var(--primary,#c0c1ff);color:var(--on-primary,#25264d)}.ds-primary:hover{background:var(--primary-light,#e1dfff)}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Quiet raised control for secondary steps and sample states.",
+      "html": "<button class=\"ds-button ds-secondary\">Next: Find your people</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:20px;min-height:48px;padding:12px 22px;border:1px solid transparent;border-radius:6px;font:500 13px/1.5 Inter,sans-serif;cursor:pointer;transition:background .2s,border-color .2s}.ds-button:focus-visible{outline:2px solid var(--primary,#c0c1ff);outline-offset:5px}.ds-secondary{background:var(--surface-container-low,#191c22);color:var(--on-surface,#e1e2eb);border-color:var(--line-strong,#ffffff26)}.ds-secondary:hover{border-color:var(--primary,#c0c1ff)}"
+    },
+    {
+      "name": "Emerald Button",
+      "kind": "button",
+      "refersTo": "button-emerald",
+      "description": "Voice demo entry action.",
+      "html": "<button class=\"ds-button ds-emerald\">Join demo room</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:20px;min-height:48px;padding:12px 22px;border:1px solid transparent;border-radius:6px;font:500 13px/1.5 Inter,sans-serif;cursor:pointer;transition:background .2s,border-color .2s}.ds-button:focus-visible{outline:2px solid var(--primary,#c0c1ff);outline-offset:5px}.ds-emerald{background:var(--secondary,#45dfa4);color:#10251f}.ds-emerald:hover{background:#83e9c3}"
+    },
+    {
+      "name": "Chat Composer",
+      "kind": "input",
+      "refersTo": "chat-composer",
+      "description": "Transparent field in a bordered row; local sample message composition.",
+      "html": "<div class=\"ds-composer\"><input aria-label=\"Sample message\" placeholder=\"Write a sample message\" /><button aria-label=\"Send sample message\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13\"/></svg></button></div>",
+      "css": ".ds-composer{display:flex;align-items:center;gap:2px;padding:4px;border:1px solid #636270;border-radius:7px;background:var(--surface,#101319);color:var(--on-surface,#e1e2eb)}.ds-composer:focus-within{border-color:var(--primary,#c0c1ff)}.ds-composer input{flex:1;min-width:0;width:0;min-height:44px;padding:8px 10px;border:0;background:transparent;color:inherit;font:12px Inter,sans-serif;outline:none;caret-color:var(--primary,#c0c1ff)}.ds-composer input::placeholder{color:var(--muted,#a6a6b3);opacity:1}.ds-composer button{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;border:0;border-radius:6px;background:transparent;color:var(--primary,#c0c1ff);cursor:pointer}.ds-composer button:hover{background:#c0c1ff0d}.ds-composer button:focus-visible{outline:2px solid var(--primary,#c0c1ff);outline-offset:5px}"
+    },
+    {
+      "name": "Planet Switcher",
+      "kind": "nav",
+      "refersTo": "world-navigation",
+      "description": "Visible world labels with a current-world underline and two-row mobile layout.",
+      "html": "<nav class=\"ds-world-nav\" aria-label=\"Switch planet\"><a href=\"#chat\" aria-current=\"page\">Chat</a><a href=\"#voice\">Voice</a><a href=\"#screen\">Screen sharing</a><a href=\"#start\">Getting started</a></nav>",
+      "css": ".ds-world-nav{display:flex;align-items:center;gap:8px;background:var(--surface-lowest,#0b0e14);font:12px/1.6 Inter,sans-serif}.ds-world-nav a{display:inline-flex;align-items:center;gap:9px;min-height:44px;padding:8px 13px;border-bottom:1px solid transparent;color:var(--muted,#a6a6b3);text-decoration:none}.ds-world-nav a::before{content:\"\";width:5px;height:5px;border-radius:50%;background:var(--primary,#c0c1ff)}.ds-world-nav a:nth-child(2)::before{background:var(--secondary,#45dfa4)}.ds-world-nav a:nth-child(3)::before{background:#bdcbd5}.ds-world-nav a:nth-child(4)::before{background:#d5cec5}.ds-world-nav a[aria-current]{color:var(--on-surface,#e1e2eb);border-color:var(--primary,#c0c1ff)}.ds-world-nav a:hover{color:var(--on-surface,#e1e2eb)}.ds-world-nav a:focus-visible{outline:2px solid var(--primary,#c0c1ff);outline-offset:5px}@media(max-width:800px){.ds-world-nav{gap:0}.ds-world-nav a{padding-inline:10px;font-size:11px}}@media(max-width:540px){.ds-world-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}.ds-world-nav a{padding:8px;font-size:12px;gap:8px}.ds-world-nav a::before{width:4px;height:4px}}"
+    },
+    {
+      "name": "Demo Panel",
+      "kind": "card",
+      "refersTo": "demo-panel",
+      "description": "Bounded quiet surface with a titlebar; the preview is static local sample content.",
+      "html": "<section class=\"ds-demo\"><div class=\"ds-demo-title\"><span>The familiar faces</span><span>Interactive demo</span></div><p>A sample channel. A few familiar faces.</p></section>",
+      "css": ".ds-demo{overflow:hidden;border:1px solid #ffffff1c;border-radius:12px;background:var(--surface,#101319);color:var(--on-surface,#e1e2eb);box-shadow:0 24px 55px -30px #000a;font:14px/1.7 Inter,sans-serif}.ds-demo-title{display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:62px;padding:14px 24px;border-bottom:1px solid var(--line,#ffffff12);font-size:12px}.ds-demo-title span+span{color:var(--muted,#a6a6b3)}.ds-demo p{padding:24px;color:var(--muted,#a6a6b3)}@media(max-width:540px){.ds-demo{border-radius:9px}.ds-demo-title{min-height:58px;padding:13px 15px;gap:8px}}"
+    },
+    {
+      "name": "Reaction",
+      "kind": "chip",
+      "description": "Local toggle rendered as a compact outlined reaction button.",
+      "html": "<button class=\"ds-reaction\" aria-pressed=\"false\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M7 10v12H3V10h4Zm0 0 5-8a3 3 0 0 1 3 3l-1 5h6a2 2 0 0 1 2 2l-2 8a2 2 0 0 1-2 2H7\"/></svg>1</button>",
+      "css": ".ds-reaction{display:inline-flex;justify-content:center;align-items:center;gap:7px;min-height:44px;min-width:55px;margin-top:8px;border:1px solid #c0c1ff35;border-radius:6px;background:#c0c1ff08;color:var(--primary,#c0c1ff);font:12px Inter,sans-serif;cursor:pointer}.ds-reaction[aria-pressed=\"true\"],.ds-reaction:hover{background:#c0c1ff1c;border-color:var(--primary,#c0c1ff)}.ds-reaction:focus-visible{outline:2px solid var(--primary,#c0c1ff);outline-offset:5px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "A quiet orbital atlas",
+    "overview": "Haven’s public website extends its finalized Zenith Minimal / Obsidian identity: spacious, restrained and welcoming. The planetary metaphor helps friends and small communities discover chat, voice and screen sharing, then open the Hosted application. It remains navigation rather than a game mechanic.\n\nAn obsidian ground, mineral worlds and fine static paths give the interface a sense of place. Product demonstrations stay legible, explicitly local and useful. Preserve the official logo asset without redrawing, recoloring or distorting it. Page-specific intent and composition remain in [PLANETARY-BRIEF.md](PLANETARY-BRIEF.md); this document captures the implemented visual system.",
+    "keyCharacteristics": [
+      "Generous negative space around a static orbital field.",
+      "Space Grotesk headings paired with Inter reading and controls.",
+      "Lavender identity and actions; emerald voice and environmental life.",
+      "Original deterministic planets baked offline into transparent WebP, with CSS/SVG horizons.",
+      "Focused local demos, visible destination labels and bounded native dialogs."
+    ],
+    "rules": [
+      {
+        "name": "The Accent Has a Job Rule",
+        "body": "Use lavender for identity and actions, emerald for voice and environmental life, and mineral accents to distinguish destinations.",
+        "section": "colors"
+      },
+      {
+        "name": "The Reading Before Miniature Rule",
+        "body": "Keep message text at 14px and the implemented mobile supporting scale at 12px; inspect the final cascade before copying an earlier media-query declaration.",
+        "section": "typography"
+      },
+      {
+        "name": "The Quiet Surface Rule",
+        "body": "Use restrained borders and tonal layers for structure; reserve the stronger shadow and backdrop for the native modal.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** preserve the official Haven logo and the Zenith Minimal / Obsidian identity.",
+      "**Do** keep destinations visibly named and navigate with semantic anchors and stable hashes.",
+      "**Do** preserve 14px message text, the final 12px mobile support overrides and the two-row mobile planet switcher.",
+      "**Do** keep landscapes present on mobile and pause ambient activity when offscreen, hidden, user-paused or reduced-motion.",
+      "**Do** label local demos honestly and show Windows availability before click.",
+      "**Do** verify responsive composition, keyboard focus, browser zoom and failure states against the implemented interface."
+    ],
+    "donts": [
+      "**Don't** add decorative telemetry, promotional badges, gradient text, fabricated metrics or broad glass effects.",
+      "**Don't** animate the resting atlas or introduce a runtime planetary renderer.",
+      "**Don't** imply that sample voice or screen demos access a microphone, capture a screen or connect a real call.",
+      "**Don't** publish a Windows download URL before its approved public release exists.",
+      "**Don't** describe all labels as 12px or larger; the implemented desktop micro-labels include smaller values."
+    ]
+  }
+}

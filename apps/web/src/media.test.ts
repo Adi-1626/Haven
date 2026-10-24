@@ -4,6 +4,7 @@ import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import type { Socket } from 'socket.io-client';
 import { useMedia } from './media';
+import { initSupabase, resetAuthClientForTesting } from './supabase';
 
 class FakeTrack {
   enabled = true;
@@ -24,7 +25,7 @@ class FakeStream {
 }
 class FakeNode {
   routes: FakeNode[] = [];
-  gain = { value: 1, setTargetAtTime(value: number) { this.value = value; } };
+  gain = { value: 1, setTargetAtTime(value: number) { this.value = value; }, setValueAtTime(value: number) { this.value = value; } };
   threshold = { value: 0 };
   knee = { value: 0 };
   ratio = { value: 0 };
@@ -81,6 +82,7 @@ class FakeSender {
   constructor(readonly track: FakeTrack) {}
   getParameters() { return structuredClone(this.parameters); }
   async setParameters(parameters: RTCRtpSendParameters) { this.parameters = parameters; }
+  async replaceTrack(track: FakeTrack | null) { (this as { track: FakeTrack | null }).track = track; }
 }
 class FakeConnection {
   static instances: FakeConnection[] = [];
@@ -88,7 +90,15 @@ class FakeConnection {
   closed = false;
   constructor() { FakeConnection.instances.push(this); }
   addTrack(track: FakeTrack) { const sender = new FakeSender(track); this.senders.push(sender); return sender; }
-  getTransceivers() { return []; }
+  transceivers: any[] = [];
+  addTransceiver(kind: string) {
+    const sender = new FakeSender(null as unknown as FakeTrack);
+    this.senders.push(sender);
+    const lane = { sender, receiver: { track: new FakeTrack(kind, `remote-${kind}`) }, direction: 'sendrecv' };
+    this.transceivers.push(lane);
+    return lane;
+  }
+  getTransceivers() { return this.transceivers; }
   removeTrack(sender: FakeSender) { this.senders = this.senders.filter(value => value !== sender); }
   close() { this.closed = true; }
 }
@@ -120,13 +130,13 @@ function environment(saved = new Map<string, string>()) {
     emit(event: string, ...args: unknown[]) {
       events.push(event);
       const callback = args.at(-1);
-      if (event === 'voice:join' && typeof callback === 'function') callback(null, { peers: peerList });
+      if (event === 'voice:join' && typeof callback === 'function') callback(null, { peers: peerList.map(peer => ({ ...peer, streamProtocol: 1 })), capabilities: { streamSubscriptions: 1 } });
     },
   };
-  const rtcResponse = { ok: true, json: async () => ({ iceServers: [] }), arrayBuffer: async () => new ArrayBuffer(8) };
+  const rtcResponse = { ok: true, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ iceServers: [] }), arrayBuffer: async () => new ArrayBuffer(8) };
   const globals = {
     localStorage: { getItem: (key: string) => saved.get(key) ?? null, setItem: (key: string, value: string) => { saved.set(key, value); } },
-    navigator: { mediaDevices }, AudioContext: FakeContext, Audio: FakeAudio, fetch: async () => rtcResponse,
+    navigator: { mediaDevices }, AudioContext: FakeContext, Audio: FakeAudio, fetch: async (input: RequestInfo | URL) => String(input).endsWith('/api/config') ? Response.json({ mode: 'local' }) : rtcResponse,
     document: { createElement: () => ({ videoWidth: 0, videoHeight: 0, play: async () => {}, pause() {}, srcObject: null }) },
     RTCPeerConnection: FakeConnection, RTCRtpSender: { getCapabilities: () => null },
   };
@@ -139,6 +149,7 @@ function environment(saved = new Map<string, string>()) {
     media, microphone, screen, events, failures, mediaDevices, rtcResponse, peerList,
     microphoneCalls: () => microphoneCalls,
     restore() {
+      resetAuthClientForTesting();
       media.leave();
       media.stopMicTest();
       Object.entries(previous).forEach(([key, descriptor]) => {
@@ -173,11 +184,91 @@ test('unavailable enhanced processing recaptures with native suppression and rel
   } finally { setup.restore(); }
 });
 
+test('hosted voice joins send the current access token when loading ICE configuration', async () => {
+  const setup = environment();
+  resetAuthClientForTesting();
+  try {
+    globalThis.fetch = async () => Response.json({
+      mode: 'hosted', supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'test-publishable-key',
+    });
+    const client = await initSupabase();
+    assert.ok(client);
+    let token = 'first-session-token';
+    client.auth.getSession = (async () => ({ data: { session: { access_token: token } }, error: null })) as typeof client.auth.getSession;
+    const authorizations: string[] = [];
+    globalThis.fetch = (async (input, options) => {
+      assert.equal(String(input), '/api/rtc');
+      assert.equal(options?.credentials, 'include');
+      const authorization = new Headers(options?.headers).get('Authorization');
+      authorizations.push(authorization ?? '');
+      return Response.json({ iceServers: [], error: 'Authentication required' }, {
+        status: authorization === `Bearer ${token}` ? 200 : 401,
+      });
+    }) as typeof fetch;
+    await setup.media.join('hosted-room');
+    setup.media.leave();
+    token = 'refreshed-session-token';
+    await setup.media.join('hosted-room');
+    assert.deepEqual(authorizations, ['Bearer first-session-token', 'Bearer refreshed-session-token']);
+    assert.equal(setup.events.filter(event => event === 'voice:join').length, 2);
+    assert.ok(setup.microphoneCalls() > 0);
+    assert.deepEqual(setup.failures, []);
+  } finally {
+    resetAuthClientForTesting();
+    setup.restore();
+  }
+});
+
+test('ICE authentication failures prevent microphone capture and report the server error', async () => {
+  const setup = environment();
+  try {
+    globalThis.fetch = async () => Response.json({ error: 'Authentication required' }, { status: 401 });
+    await setup.media.join('private-room');
+    assert.equal(setup.microphoneCalls(), 0);
+    assert.equal(setup.events.includes('voice:join'), false);
+    assert.deepEqual(setup.failures, ['Could not join voice: Authentication required']);
+  } finally { setup.restore(); }
+});
+
+test('ICE retries report exhaustion once, reset after recovery and stop on leave', async context => {
+  const setup = environment();
+  try {
+    setup.media.setSettings({ noiseSuppression: false });
+    setup.peerList.push({ socketId: 'remote', user: { id: 'remote-user', name: 'Remote' } });
+    await setup.media.join('retry-room');
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const connection = FakeConnection.instances[0] as any;
+    let restarts = 0;
+    connection.restartIce = () => { restarts++; };
+    connection.connectionState = 'failed';
+    connection.onconnectionstatechange();
+    for (const delay of [2000, 4000, 8000, 16000, 30000]) context.mock.timers.tick(delay);
+    assert.equal(restarts, 5);
+    assert.deepEqual(setup.failures, []);
+    context.mock.timers.tick(30000);
+    assert.match(setup.failures[0], /Could not restore.*Remote/);
+    connection.onconnectionstatechange();
+    context.mock.timers.tick(30000);
+    assert.equal(setup.failures.length, 1);
+    connection.connectionState = 'connected';
+    connection.onconnectionstatechange();
+    connection.connectionState = 'disconnected';
+    connection.onconnectionstatechange();
+    context.mock.timers.tick(2000);
+    assert.equal(restarts, 6);
+    setup.media.leave();
+    context.mock.timers.tick(30000);
+    assert.equal(restarts, 6);
+    assert.equal(connection.onconnectionstatechange, null);
+    assert.ok(connection.getTransceivers().every((lane: any) => lane.receiver.track.stopped));
+  } finally { setup.restore(); context.mock.timers.reset(); }
+});
+
 test('leaving while ICE configuration is pending prevents stale microphone capture and joining', async () => {
   const setup = environment();
   try {
     const response = deferred<typeof setup.rtcResponse>();
-    globalThis.fetch = (() => response.promise) as unknown as typeof fetch;
+    globalThis.fetch = ((input: RequestInfo | URL) => String(input).endsWith('/api/config') ? Promise.resolve(Response.json({ mode: 'local' })) : response.promise) as unknown as typeof fetch;
     const pending = setup.media.join('old-room');
     setup.media.leave();
     response.resolve(setup.rtcResponse);
@@ -221,10 +312,11 @@ test('screen capture and local sound monitoring preserve the microphone mixer wi
     assert.equal(microphone.enabled, true);
     assert.equal(context.microphoneNodes.length, 1);
     await setup.media.playSound('/sound.mp3');
-    const soundMonitor = context.soundNodes[0].routes[1];
-    assert.deepEqual(context.soundNodes[0].routes, [context.uplink, soundMonitor]);
-    assert.deepEqual(soundMonitor.routes, [context.destination]);
-    assert.equal(context.soundNodes[0].started, true);
+    const playbackContext = FakeContext.instances[1];
+    const soundMonitor = playbackContext.soundNodes[0].routes[0];
+    assert.equal(context.soundNodes.length, 0, 'soundboard never enters the microphone/WebRTC mixer');
+    assert.deepEqual(soundMonitor.routes, [playbackContext.destination]);
+    assert.equal(playbackContext.soundNodes[0].started, true);
     setup.media.toggleDeafen();
     assert.equal(soundMonitor.gain.value, 0);
     assert.equal(microphone.enabled, false);
@@ -242,35 +334,9 @@ test('screen capture and local sound monitoring preserve the microphone mixer wi
   } finally { setup.restore(); }
 });
 
-test('live source resize adjusts sender downscaling while keeping voice and system audio on separate senders', async () => {
-  const setup = environment();
-  try {
-    setup.peerList.push({ socketId: 'remote', user: { id: 'remote-user', name: 'Remote' } });
-    await setup.media.join('room');
-    const connection = FakeConnection.instances[0];
-    const microphoneSender = connection.senders[0];
-    assert.equal(microphoneSender.track.id, 'mixed-audio');
-    await setup.media.startShare();
-    assert.equal(connection.senders.length, 3);
-    const screenSender = connection.senders.find(sender => sender.track.kind === 'video')!;
-    assert.equal(screenSender.parameters.encodings[0].scaleResolutionDownBy, 1);
-    screenSender.track.settings = { width: 1920, height: 1080 };
-    await setup.media.setShareQuality(720, 30, 4);
-    assert.equal(screenSender.parameters.encodings[0].scaleResolutionDownBy, 1.5);
-    assert.equal(screenSender.parameters.encodings[0].maxFramerate, 30);
-    assert.equal(screenSender.parameters.encodings[0].maxBitrate, 4_000_000);
-    screenSender.track.settings = { width: 640, height: 360 };
-    await setup.media.setShareQuality(720, 60, 8);
-    assert.equal(screenSender.parameters.encodings[0].scaleResolutionDownBy, 1);
-    assert.deepEqual(screenSender.track.constraints, { frameRate: { ideal: 60, max: 60 }, resizeMode: 'none' });
-    setup.media.stopShare();
-    assert.deepEqual(connection.senders, [microphoneSender]);
-    assert.equal(microphoneSender.track.stopped, false);
-    setup.media.leave();
-    assert.equal(connection.closed, true);
-    assert.deepEqual(setup.failures, []);
-  } finally { setup.restore(); }
-});
+// Source resize, separate screen audio and sender reuse now run against real
+// Chromium SDP/RTP in e2e/stream-subscriptions.spec.ts; fake peers cannot
+// establish or associate offered transceivers.
 
 test('microphone test canceled during permission acquisition stops late capture without starting playback', async () => {
   const setup = environment();

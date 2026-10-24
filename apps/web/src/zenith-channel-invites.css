@@ -1,0 +1,772 @@
+/* ==========================================================================
+   Zenith Minimal — Channel Creation & Community Invitations
+   Stitch Project: 11165322381747399297
+   Screen ID: f79fd5492b8649229d5efcbd9a53a1ea
+   ========================================================================== */
+
+/* Frame overrides on dialog.modal for Zenith Minimal Channel & Invite */
+dialog.modal.zenith-modal-frame {
+  background: #151821 !important;
+  border: 1px solid rgba(70, 70, 79, 0.45) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  color: #e1e2eb !important;
+}
+
+dialog.modal.zenith-modal-frame > header {
+  display: none !important;
+}
+
+dialog.modal.zenith-channel-modal {
+  width: 520px !important;
+  max-width: min(520px, calc(100vw - 24px)) !important;
+  max-height: min(720px, calc(100vh - 32px)) !important;
+}
+
+dialog.modal.zenith-invite-modal {
+  width: 480px !important;
+  max-width: min(480px, calc(100vw - 24px)) !important;
+  max-height: min(720px, calc(100vh - 32px)) !important;
+}
+
+/* Modal Root Container */
+.zenith-modal-inner {
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  background: #151821;
+  color: #e1e2eb;
+  font-family: var(--font-sans, 'Inter', sans-serif);
+  box-sizing: border-box;
+  max-height: min(720px, calc(100vh - 32px));
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #272a30 transparent;
+}
+
+/* Modal Header */
+.zenith-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 12px;
+}
+
+.zenith-modal-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.zenith-modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zenith-modal-icon-channel {
+  color: #c0c1ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.zenith-modal-icon-invite {
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.zenith-modal-heading {
+  font-family: var(--font-display, 'Space Grotesk', sans-serif);
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.25;
+  color: #e1e2eb;
+  letter-spacing: -0.02em;
+  margin: 0;
+  word-break: break-word;
+}
+
+.zenith-modal-subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.zenith-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34d399;
+  flex-shrink: 0;
+}
+
+.zenith-modal-subtitle {
+  font-size: 11px;
+  font-weight: 500;
+  color: #918f9a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zenith-modal-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: #918f9a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.zenith-modal-close-btn:hover {
+  background: #272a30;
+  color: #e1e2eb;
+}
+
+/* Form Sections */
+.zenith-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.zenith-form-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.zenith-eyebrow-label {
+  display: block;
+  font-family: var(--font-display, 'Space Grotesk', sans-serif);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c0c1ff;
+  margin-bottom: 8px;
+}
+
+/* Channel Type Cards */
+.zenith-channel-type-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.zenith-type-card {
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(70, 70, 79, 0.45);
+  background: rgba(11, 14, 20, 0.6);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+  user-select: none;
+}
+
+.zenith-type-card:hover {
+  background: #191c22;
+  border-color: rgba(145, 143, 154, 0.5);
+}
+
+.zenith-type-card.is-selected {
+  border: 2px solid #c0c1ff;
+  background: rgba(39, 42, 48, 0.5);
+  box-shadow: 0 0 0 1px rgba(192, 193, 255, 0.15);
+  padding: 13px; /* account for 2px border */
+}
+
+.zenith-type-icon {
+  margin-top: 2px;
+  color: #918f9a;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zenith-type-card.is-selected .zenith-type-icon {
+  color: #c0c1ff;
+}
+
+.zenith-type-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.zenith-type-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.zenith-type-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e1e2eb;
+}
+
+.zenith-radio-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(145, 143, 154, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease;
+}
+
+.zenith-type-card.is-selected .zenith-radio-dot {
+  border: 2px solid #c0c1ff;
+}
+
+.zenith-radio-dot-inner {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c0c1ff;
+}
+
+.zenith-type-desc {
+  font-size: 11px;
+  line-height: 1.35;
+  color: #918f9a;
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.zenith-type-card.is-selected .zenith-type-desc {
+  color: #c7c5d0;
+}
+
+/* Inputs & Form Controls */
+.zenith-input-prefix-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.zenith-input-prefix {
+  position: absolute;
+  left: 12px;
+  color: #918f9a;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 14px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.zenith-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0b0e14;
+  border: 1px solid rgba(70, 70, 79, 0.5);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #e1e2eb;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+}
+
+.zenith-input.has-prefix {
+  padding-left: 32px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.zenith-input:focus {
+  border-color: #c0c1ff;
+  box-shadow: 0 0 0 1px #c0c1ff;
+}
+
+.zenith-input::placeholder {
+  color: #918f9a;
+}
+
+.zenith-input-help {
+  font-size: 11px;
+  color: #918f9a;
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+/* Modal Footer & Actions */
+.zenith-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.zenith-btn-cancel {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #c7c5d0;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.zenith-btn-cancel:hover {
+  color: #ffffff;
+  background: #272a30;
+}
+
+.zenith-btn-primary {
+  background: #c0c1ff;
+  color: #1000a9;
+  font-family: var(--font-display, 'Space Grotesk', sans-serif);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+
+.zenith-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.zenith-btn-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.zenith-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.zenith-btn-danger-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: 1px solid rgba(255, 180, 171, 0.35);
+  color: #ffb4ab;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.zenith-btn-danger-outline:hover {
+  background: rgba(147, 0, 10, 0.35);
+  border-color: #ffb4ab;
+}
+
+/* ==========================================================================
+   Invitations Modal Specifics
+   ========================================================================== */
+
+.zenith-invite-desc {
+  font-size: 12px;
+  color: #c7c5d0;
+  line-height: 1.6;
+  margin: 14px 0 0 0;
+}
+
+.zenith-notice-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(39, 42, 48, 0.6);
+  border: 1px solid rgba(70, 70, 79, 0.4);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 11px;
+  color: #ffb95f;
+  margin-top: 14px;
+}
+
+.zenith-notice-box svg {
+  flex-shrink: 0;
+  color: #ffb95f;
+}
+
+.zenith-expire-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+  gap: 12px;
+}
+
+.zenith-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.zenith-select {
+  appearance: none;
+  background: #0b0e14;
+  border: 1px solid rgba(70, 70, 79, 0.45);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #e1e2eb;
+  padding: 7px 30px 7px 12px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.zenith-select:focus {
+  border-color: #c0c1ff;
+}
+
+.zenith-select-icon {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+  color: #918f9a;
+  display: flex;
+  align-items: center;
+}
+
+/* Generated Invite Box */
+.zenith-invite-card {
+  margin-top: 14px;
+  background: #0b0e14;
+  border: 1px solid rgba(70, 70, 79, 0.5);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zenith-invite-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.zenith-invite-link-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  color: #c7c5d0;
+  outline: none;
+  user-select: all;
+  text-overflow: ellipsis;
+}
+
+.zenith-invite-link-input:focus {
+  color: #ffffff;
+}
+
+.zenith-btn-copy-link {
+  background: #c0c1ff;
+  color: #1000a9;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+
+.zenith-btn-copy-link:hover {
+  filter: brightness(1.06);
+}
+
+.zenith-btn-copy-link:active {
+  transform: scale(0.97);
+}
+
+.zenith-invite-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 9px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: #918f9a;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.zenith-direct-code-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zenith-direct-code-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #272a30;
+  color: #c0c1ff;
+  font-weight: 500;
+}
+
+.zenith-btn-copy-code {
+  background: transparent;
+  border: none;
+  color: #918f9a;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-family: inherit;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.zenith-btn-copy-code:hover {
+  color: #e1e2eb;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Active Invitations */
+.zenith-active-invites-section {
+  margin-top: 22px;
+  display: flex;
+  flex-direction: column;
+}
+
+.zenith-active-invites-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.zenith-active-count {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  color: #918f9a;
+}
+
+.zenith-invites-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.zenith-invite-item {
+  background: rgba(25, 28, 34, 0.85);
+  border: 1px solid rgba(70, 70, 79, 0.35);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: background 0.15s ease;
+}
+
+.zenith-invite-item:hover {
+  background: rgba(39, 42, 48, 0.6);
+}
+
+.zenith-invite-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.zenith-pulse-wrapper {
+  position: relative;
+  display: flex;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+
+.zenith-pulse-ping {
+  position: absolute;
+  display: inline-flex;
+  height: 100%;
+  width: 100%;
+  border-radius: 50%;
+  background: #34d399;
+  opacity: 0.75;
+  animation: zenith-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.zenith-pulse-dot {
+  position: relative;
+  display: inline-flex;
+  border-radius: 50%;
+  height: 8px;
+  width: 8px;
+  background: #34d399;
+}
+
+@keyframes zenith-ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.zenith-invite-item-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.zenith-invite-item-code {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  font-weight: 500;
+  color: #e1e2eb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zenith-invite-item-sub {
+  font-size: 10px;
+  color: #918f9a;
+  margin-top: 2px;
+}
+
+.zenith-invite-item-delete {
+  padding: 6px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #918f9a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.zenith-invite-item-delete:hover {
+  color: #ffb4ab;
+  background: #272a30;
+}
+
+/* Invite Modal Footer Note */
+.zenith-invite-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: #918f9a;
+}
+
+.zenith-role-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zenith-role-indicator svg {
+  color: #918f9a;
+}
+
+.zenith-link-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  color: #918f9a;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.zenith-link-btn:hover {
+  color: #c7c5d0;
+  text-decoration: underline;
+}
+
+/* Responsive Viewport Optimizations */
+@media (max-width: 600px) {
+  .zenith-modal-inner {
+    padding: 18px 16px;
+  }
+
+  .zenith-channel-type-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .zenith-invite-link-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .zenith-btn-copy-link {
+    justify-content: center;
+  }
+}
+
+@media (max-height: 600px) {
+  .zenith-modal-inner {
+    padding: 16px;
+  }
+
+  .zenith-form-body {
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  .zenith-modal-footer {
+    margin-top: 16px;
+    padding-top: 14px;
+  }
+}

@@ -9,10 +9,24 @@ const { defaults, parseShortcut, validateSettings } = require(path.join(electron
 const { createDesktopRuntime } = require(path.join(electronDir, 'desktop-runtime.cjs'));
 
 test('keyboard combinations normalize, reject duplicates and Windows-reserved shortcuts', () => {
-  assert.deepEqual(parseShortcut(' shift + ctrl + space '), { accelerator: 'Control+Shift+Space', keyCode: 32, modifiers: 6 });
-  assert.equal(parseShortcut('alt+f8').keyCode, 119);
-  assert.equal(parseShortcut('').accelerator, '');
-  for (const invalid of ['Space', 'Control+Control+M', 'Win+M', 'Alt+F4', 'Control+Alt+Delete', 'Control+Escape', 'Alt+Tab', 'Control+M+N', 'Control+Unknown']) assert.throws(() => parseShortcut(invalid));
+  assert.deepEqual(parseShortcut(' shift + ctrl + space '), { shortcut: 'Control+Shift+Space', accelerator: 'Control+Shift+Space', scanCode: 0x39, extended: false, modifiers: 6 });
+  assert.equal(parseShortcut('alt+f8').scanCode, 0x42);
+  assert.equal(parseShortcut('').shortcut, '');
+  assert.deepEqual(parseShortcut('Backquote', { bare: true }), { shortcut: 'Backquote', accelerator: '`', scanCode: 0x29, extended: false, modifiers: 0 });
+  assert.equal(parseShortcut('`', { bare: true }).shortcut, 'Backquote');
+  assert.equal(parseShortcut('Control+Numpad0').accelerator, 'Control+num0');
+  // Numpad0 and Insert share a scan code; the E0 prefix tells them apart, exactly as KeyboardEvent.code does.
+  assert.deepEqual([parseShortcut('Numpad0', { bare: true }).extended, parseShortcut('Insert', { bare: true }).extended, parseShortcut('Numpad0', { bare: true }).scanCode === parseShortcut('Insert', { bare: true }).scanCode], [false, true, true]);
+  assert.deepEqual(parseShortcut('ControlRight', { bare: true }), { shortcut: 'ControlRight', accelerator: '', scanCode: 0x1D, extended: true, modifiers: 0 });
+  assert.equal(parseShortcut('ArrowLeft', { bare: true }).shortcut, 'Left');
+  for (const invalid of ['Backquote', 'ControlRight', 'Control+ControlRight']) assert.throws(() => parseShortcut(invalid));
+  assert.throws(() => parseShortcut('Shift+ControlRight', { bare: true }), /on its own/);
+  assert.throws(() => parseShortcut('Control+NumpadEnter'), /cannot be used/);
+  assert.equal(parseShortcut('Control+NumpadEnter', { bare: true }).accelerator, '');
+  assert.equal(validateSettings(defaults, { pttShortcut: 'Backquote' }).pttShortcut, 'Backquote');
+  assert.throws(() => validateSettings(defaults, { muteShortcut: 'Backquote' }), /needs Control/);
+  assert.throws(() => validateSettings(defaults, { pttShortcut: 'Alt+Space' }), /reserved/);
+  for (const invalid of ['Space', 'Control+Control+M', 'Win+M', 'Alt+F4', 'Control+Alt+Delete', 'Control+Escape', 'Control+Shift+Escape', 'Alt+Tab', 'Control+M+N', 'Control+Unknown']) assert.throws(() => parseShortcut(invalid));
   assert.throws(() => validateSettings(defaults, { muteShortcut: defaults.pttShortcut }), /different/);
   assert.throws(() => validateSettings(defaults, { closeToTray: 'true' }), /Invalid/);
   assert.throws(() => validateSettings(defaults, { arbitrary: true }), /Unknown/);

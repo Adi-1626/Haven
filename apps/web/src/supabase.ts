@@ -1,9 +1,12 @@
 import { createClient, type SupabaseClient, type Session } from '@supabase/supabase-js';
+import { authStorage, setAuthPersistence } from './auth-storage.js';
 import { getApiBaseUrl } from './api.js';
+import { BackendUnavailableError, readApiJson } from './json-response.js';
 
 let client: SupabaseClient | null = null;
 let clientPromise: Promise<SupabaseClient | null> | null = null;
 let authMode: 'hosted' | 'local' = 'local';
+let authStorageKey = '';
 
 export interface HavenAuthConfig {
   mode?: 'hosted' | 'local';
@@ -13,15 +16,22 @@ export interface HavenAuthConfig {
 }
 
 export async function fetchAuthConfig(): Promise<HavenAuthConfig> {
-  try {
-    const base = getApiBaseUrl();
-    const response = await fetch(`${base}/api/config`);
-    if (response.ok) {
-      const data = await response.json();
+  const base = getApiBaseUrl();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const response = await fetch(`${base}/api/config`, { signal: AbortSignal.timeout(8000) });
+      const data = await readApiJson(response);
+      if (data.mode !== undefined && data.mode !== 'local' && data.mode !== 'hosted') throw new BackendUnavailableError();
+      if ((data.mode === 'hosted' || data.supabaseUrl) && (!data.supabaseUrl || !data.supabaseAnonKey)) throw new BackendUnavailableError();
+      // An empty response is not evidence of Local Mode. Legacy local backends
+      // return publicUrl or capabilities; new ones return mode explicitly.
+      if (!data.mode && !data.supabaseUrl && !data.publicUrl && !data.capabilities) throw new BackendUnavailableError();
       return data as HavenAuthConfig;
+    } catch (error) {
+      if (attempt >= 2) throw error;
+      await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
     }
-  } catch {}
-  return { mode: 'local' };
+  }
 }
 
 export async function initSupabase(): Promise<SupabaseClient | null> {
@@ -33,51 +43,44 @@ export async function initSupabase(): Promise<SupabaseClient | null> {
     let key = typeof window !== 'undefined' ? window.__HAVEN_CONFIG__?.supabaseAnonKey : undefined;
 
     if (!url || !key) {
-      const env = (import.meta as any).env || {};
-      url = url || env.VITE_SUPABASE_URL;
-      key = key || env.VITE_SUPABASE_ANON_KEY;
-    }
-
-    if (!url || !key) {
       const config = await fetchAuthConfig();
       if (config.supabaseUrl && config.supabaseAnonKey) {
         url = config.supabaseUrl;
         key = config.supabaseAnonKey;
         authMode = config.mode || 'hosted';
+      } else if (config.mode === 'local' || (!config.mode && !config.supabaseUrl)) {
+        // Connected to a backend that explicitly runs in Local Mode or lacks Supabase configuration.
+        authMode = 'local';
+        return null;
       }
     }
 
     if (!url || !key) {
+      const env = (import.meta as any).env || {};
+      url = env.VITE_SUPABASE_URL;
+      key = env.VITE_SUPABASE_ANON_KEY;
+    }
+
+    if (!url || !key) {
+      authMode = 'local';
       return null;
     }
 
     authMode = 'hosted';
-
-    const desktopAuthStorage = (typeof window !== 'undefined' && window.haven?.storeAuthSession && window.haven?.getAuthSession)
-      ? {
-          getItem: async (_key: string): Promise<string | null> => {
-            return (await window.haven!.getAuthSession?.()) || null;
-          },
-          setItem: async (_key: string, value: string): Promise<void> => {
-            await window.haven!.storeAuthSession?.(value);
-          },
-          removeItem: async (_key: string): Promise<void> => {
-            await window.haven!.clearAuthSession?.();
-          },
-        }
-      : undefined;
+    authStorageKey = `sb-${new URL(url).hostname.split('.')[0]}-auth-token`;
 
     client = createClient(url, key, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
-        ...(desktopAuthStorage ? { storage: desktopAuthStorage } : {}),
+        storageKey: authStorageKey,
+        storage: authStorage,
       },
     });
 
     return client;
-  })();
+  })().catch(error => { clientPromise = null; throw error; });
 
   return clientPromise;
 }
@@ -114,4 +117,9 @@ export function resetAuthClientForTesting(): void {
   client = null;
   clientPromise = null;
   authMode = 'local';
+}
+
+export async function setRememberSession(remember: boolean): Promise<void> {
+  const sb = client || await initSupabase();
+  if (sb) await setAuthPersistence(remember, authStorageKey);
 }

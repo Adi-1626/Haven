@@ -1,0 +1,653 @@
+/* =========================================================================
+ * HAVEN ZENITH MINIMAL — Social Dialogs & System State Styles
+ * Covers:
+ *  1. Add Friend Modal (Screen ID: 4cf1f75ea0af44bc8c284f49feb3e773)
+ *  2. Start Group Conversation Modal (Screen ID: 4cf1f75ea0af44bc8c284f49feb3e773)
+ *  3. Reconnecting & Cold Start Banners (Screen ID: f3f65e1fdcb640ae98e3ec8cf2be34c9)
+ *  4. Zenith Empty States & Loading Micro-States
+ * ========================================================================= */
+
+/* Modal Frame Resets for Social Modals */
+dialog.modal.zenith-add-friend-modal,
+dialog.modal.zenith-group-modal {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  max-width: 95vw;
+}
+
+dialog.modal.zenith-add-friend-modal {
+  width: 500px !important;
+}
+
+dialog.modal.zenith-group-modal {
+  width: 480px !important;
+}
+
+/* Base Card Shell for Social Modals */
+.zenith-social-modal-card {
+  background: #151821;
+  border: 1px solid #464554;
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  padding: 24px;
+  color: #e1e2eb;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-sizing: border-box;
+}
+
+/* Header */
+.zenith-social-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(43, 50, 64, 0.6);
+  margin-bottom: 14px;
+}
+
+.zenith-social-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zenith-social-icon-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #101319;
+  border: 1px solid #2b3240;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c0c1ff;
+  flex-shrink: 0;
+}
+
+.zenith-social-title {
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.zenith-social-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #90909a;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.zenith-social-close-btn:hover {
+  background: #191c22;
+  color: #ffffff;
+}
+
+/* Explanatory Lead Paragraph */
+.zenith-social-lead {
+  font-family: var(--font-body, 'Inter', system-ui, sans-serif);
+  font-size: 13px;
+  line-height: 1.6;
+  color: #90909a;
+  margin: 0 0 14px 0;
+}
+
+/* Own Username Box */
+.zenith-own-username-box {
+  background: #101319;
+  border: 1px solid #2b3240;
+  border-radius: 6px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.zenith-own-username-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zenith-emerald-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+  flex-shrink: 0;
+}
+
+.zenith-own-username-label {
+  font-size: 12px;
+  color: #90909a;
+}
+
+.zenith-own-username-chip {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  font-weight: 500;
+  color: #ffffff;
+  background: #0b0e14;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(43, 50, 64, 0.6);
+}
+
+.zenith-own-copy-btn {
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 500;
+  color: #c0c1ff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.zenith-own-copy-btn:hover {
+  background: #151821;
+  color: #ffffff;
+}
+
+/* Form Groups & Inputs */
+.zenith-field-group {
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.zenith-field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.zenith-field-label {
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c0c1ff;
+  margin: 0;
+}
+
+.zenith-char-counter {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  color: #71717a;
+}
+
+.zenith-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.zenith-social-input {
+  width: 100%;
+  background: #0b0e14;
+  border: 1px solid #464554;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #e1e2eb;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.zenith-social-input.font-mono {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.zenith-social-input::placeholder {
+  color: #90909a;
+}
+
+.zenith-social-input:focus {
+  border-color: #c0c1ff;
+  box-shadow: 0 0 0 1px #c0c1ff;
+  outline: none;
+}
+
+.zenith-input-suffix {
+  position: absolute;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  color: #34d399;
+}
+
+/* Success Banner */
+.zenith-success-banner {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  color: #a7f3d0;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.zenith-success-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.zenith-success-header svg {
+  color: #34d399;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.zenith-success-text {
+  line-height: 1.5;
+  color: #a7f3d0;
+}
+
+.zenith-success-text strong {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  color: #ffffff;
+}
+
+.zenith-success-link {
+  color: #6ee7b7;
+  font-weight: 500;
+  margin-left: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+  font-size: 12px;
+  transition: color 0.15s ease;
+}
+
+.zenith-success-link:hover {
+  color: #a7f3d0;
+  text-decoration: underline;
+}
+
+/* Footer Actions */
+.zenith-social-footer {
+  padding-top: 16px;
+  border-top: 1px solid rgba(43, 50, 64, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.zenith-secondary-btn {
+  background: #1d2026;
+  border: 1px solid #464554;
+  color: #e1e2eb;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.zenith-secondary-btn:hover {
+  background: #252932;
+  border-color: #5d5c6f;
+}
+
+.zenith-primary-btn {
+  background: #c0c1ff;
+  color: #1000a9;
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s ease, filter 0.15s ease, opacity 0.15s ease;
+}
+
+.zenith-primary-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.zenith-primary-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.zenith-primary-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.zenith-full-btn {
+  width: 100%;
+}
+
+/* =========================================================================
+ * Group Conversation Checklist
+ * ========================================================================= */
+
+.zenith-friend-checklist {
+  background: #101319;
+  border: 1px solid #2b3240;
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.zenith-friend-checklist::-webkit-scrollbar {
+  width: 4px;
+}
+
+.zenith-friend-checklist::-webkit-scrollbar-track {
+  background: rgba(16, 19, 25, 0.4);
+}
+
+.zenith-friend-checklist::-webkit-scrollbar-thumb {
+  background: #2b3240;
+  border-radius: 4px;
+}
+
+.zenith-friend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #151821;
+  border: 1px solid rgba(43, 50, 64, 0.6);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  user-select: none;
+}
+
+.zenith-friend-row:hover {
+  border-color: #464554;
+  background: #191c22;
+}
+
+.zenith-friend-row.is-selected {
+  border-color: rgba(192, 193, 255, 0.4);
+  background: #181b24;
+}
+
+.zenith-friend-row-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.zenith-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.zenith-presence-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid #151821;
+}
+
+.zenith-presence-dot.online {
+  background: #34d399;
+}
+
+.zenith-presence-dot.idle {
+  background: #fbbf24;
+}
+
+.zenith-presence-dot.dnd {
+  background: #f43f5e;
+}
+
+.zenith-presence-dot.offline {
+  background: #64748b;
+}
+
+.zenith-friend-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.zenith-friend-display-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s ease;
+}
+
+.zenith-friend-row:hover .zenith-friend-display-name {
+  color: #c0c1ff;
+}
+
+.zenith-friend-username {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: #90909a;
+}
+
+.zenith-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid #464554;
+  accent-color: #c0c1ff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.zenith-checklist-empty {
+  text-align: center;
+  padding: 24px 12px;
+  color: #90909a;
+  font-size: 12px;
+}
+
+.zenith-selected-pill {
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 10px;
+  color: #34d399;
+  font-weight: 600;
+}
+
+/* =========================================================================
+ * Reconnecting & Network State Banners (Screen ID: f3f65e1fdcb640ae98e3ec8cf2be34c9)
+ * ========================================================================= */
+
+.connection-banner.zenith-reconnecting-banner {
+  background: rgba(255, 185, 95, 0.1) !important;
+  border-bottom: 1px solid rgba(255, 185, 95, 0.25) !important;
+  color: #ffb95f !important;
+  padding: 10px 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  font-family: var(--font-body, 'Inter', system-ui, sans-serif);
+}
+
+.zenith-reconnect-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.zenith-reconnect-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: rgba(255, 185, 95, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #ffb95f;
+  animation: pulse 1.8s infinite;
+}
+
+.zenith-reconnect-text-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.zenith-reconnect-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffd699;
+}
+
+.zenith-reconnect-subtitle {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  color: rgba(255, 185, 95, 0.85);
+}
+
+.zenith-reconnect-btn {
+  flex-shrink: 0;
+  font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 185, 95, 0.2);
+  border: 1px solid rgba(255, 185, 95, 0.35);
+  color: #ffe2b8;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.zenith-reconnect-btn:hover {
+  background: rgba(255, 185, 95, 0.3);
+  border-color: rgba(255, 185, 95, 0.5);
+  color: #ffffff;
+}
+
+/* =========================================================================
+ * Full-Screen Cold-Start / App Loading Micro-State
+ * ========================================================================= */
+
+.loading.zenith-app-loading {
+  background: #0b0e14 !important;
+  color: #e1e2eb !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 20px;
+}
+
+.zenith-loading-glyph-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: #151821;
+  border: 1px solid #2b3240;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 0 30px rgba(192, 193, 255, 0.08);
+}
+
+.zenith-starburst {
+  font-size: 24px;
+  line-height: 1;
+  color: #c0c1ff;
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+.zenith-loading-text-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #90909a;
+}
+
+.zenith-loading-ping-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c0c1ff;
+  box-shadow: 0 0 8px #c0c1ff;
+  animation: pulse 1.5s infinite;
+}
+
+.zenith-loading-version-badge {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  color: #71717a;
+  background: #101319;
+  border: 1px solid #2b3240;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  dialog.modal.zenith-add-friend-modal,
+  dialog.modal.zenith-group-modal {
+    width: calc(100vw - 20px) !important;
+  }
+
+  .zenith-social-modal-card {
+    padding: 18px 14px;
+  }
+}

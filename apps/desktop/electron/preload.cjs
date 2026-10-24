@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('haven', {
+  getApiOrigin: () => ipcRenderer.sendSync('server:api-origin'),
   connectServer: address => ipcRenderer.invoke('server:connect', address),
   getConnection: () => ipcRenderer.invoke('server:current'),
   openBrowserClient: () => ipcRenderer.invoke('client:browser'),

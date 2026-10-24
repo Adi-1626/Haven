@@ -8,11 +8,11 @@ const { createClientSettings, validSetting } = require('../apps/desktop/electron
 test('desktop restarts retain denoising and uncapped gaming preferences', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'haven-voice-preferences-'));
   try {
-    const settings = { inputDevice: 'microphone-id', outputDevice: 'speaker-id', inputDeviceLabel: 'Selected mic', outputDeviceLabel: 'Selected speaker', inputVolume: 1.4, outputVolume: .65, inputSensitivity: -38, pushToTalk: true, pushToTalkKey: 'Control+Shift+F10', echoCancellation: false, noiseSuppression: true, noiseSuppressionMode: 'enhanced', gamingMode: true, voiceBitrateKbps: 64, shareHeight: 1440, shareFps: 60, shareBitrateMbps: 12 };
+    const settings = { inputDevice: 'microphone-id', outputDevice: 'speaker-id', inputDeviceLabel: 'Selected mic', outputDeviceLabel: 'Selected speaker', inputVolume: 1.4, outputVolume: .65, soundboardVolume: .4, soundboardMuted: true, inputSensitivity: -38, pushToTalk: true, pushToTalkKey: 'Control+Shift+F10', echoCancellation: false, noiseSuppression: true, noiseSuppressionMode: 'enhanced', gamingMode: true, voiceBitrateKbps: 64, shareHeight: 1440, shareFps: 60, shareBitrateMbps: 12 };
     const store = createClientSettings(directory);
     assert.equal(store.status('toString').error, 'Unknown client setting');
     assert.equal(store.status('__proto__').value, null);
-    store.write('haven.media.settings', JSON.stringify(settings));
+    assert.deepEqual(store.write('haven.media.settings', JSON.stringify(settings)), { ok: true });
     store.flush();
     assert.deepEqual(JSON.parse(createClientSettings(directory).read('haven.media.settings')), settings);
     assert.equal(validSetting('haven.media.settings', JSON.stringify({ ...settings, shareHeight: 'native' })), true);
@@ -38,7 +38,7 @@ test('rejected and failed writes retain the last durable microphone policy', () 
     assert.deepEqual(store.write('haven.media.settings', value), { ok: true });
     // No flush, timer or graceful shutdown is required for an acknowledged save.
     assert.equal(createClientSettings(directory).read('haven.media.settings'), value);
-    for (const patch of [{ outputVolume: 2 }, { inputVolume: -1 }, { inputSensitivity: 1 }, { outputVolume: '1' }, { pushToTalk: 'true' }, { pushToTalkKey: '' }, { unknown: true }, { noiseSuppressionMode: 'rnnoise' }]) {
+    for (const patch of [{ outputVolume: 2 }, { soundboardVolume: -1 }, { soundboardVolume: 2 }, { soundboardMuted: 'true' }, { inputVolume: -1 }, { inputSensitivity: 1 }, { outputVolume: '1' }, { pushToTalk: 'true' }, { pushToTalkKey: '' }, { unknown: true }, { noiseSuppressionMode: 'rnnoise' }]) {
       assert.equal(store.write('haven.media.settings', JSON.stringify(patch)).ok, false);
       assert.equal(store.read('haven.media.settings'), value);
     }

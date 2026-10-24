@@ -1,6 +1,837 @@
 .invited-community-icon{overflow:hidden}.invited-community-icon>img{width:100%;height:100%;object-fit:cover}
 .community-icon{display:inline-grid;place-items:center;width:100%;height:100%;border-radius:inherit;overflow:hidden;flex-shrink:0}.community-icon>img{display:block;width:100%;height:100%;object-fit:cover}.community-settings{display:flex;flex-direction:column;gap:18px}.community-settings-summary{display:flex;align-items:center;gap:16px}.community-settings-summary>.community-icon{width:62px;height:62px;border-radius:16px;background:#354866;font-size:24px}.community-settings-summary h3{margin:0 0 7px}.community-settings-summary p{margin:0;font-size:12px;color:var(--muted)}.community-settings-tabs{display:flex;flex-wrap:wrap;gap:5px;border-bottom:1px solid var(--line);padding-bottom:12px}.community-settings-tabs button{padding:9px 13px;border-radius:6px;font-size:12px}.community-settings-tabs button.active{background:#344665;color:#dce7ff}.community-icon-upload{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:12px}.community-icon-upload>.secondary{align-self:flex-start}.community-metadata{display:flex;justify-content:space-between;gap:12px;font-size:11px;color:var(--muted)}.community-settings .permission-row>span{flex:1}.community-settings .permission-row small{display:block;color:var(--muted);font-size:10px}.community-settings textarea{resize:vertical}.community-settings .danger-zone{margin-top:10px}.community-settings .simple-form>.primary{align-self:flex-start}
 .haven-context-menu{position:fixed;z-index:10000;width:270px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;background:#152033;border:1px solid #425b80;border-radius:9px;box-shadow:0 12px 38px #0007;padding:7px;display:flex;flex-direction:column;color:#d1def3;isolation:isolate}.haven-context-menu>[role=menuitem]{width:100%;text-align:left;padding:9px 10px;border-radius:5px;font-size:12px;line-height:1.5}.haven-context-menu>[role=menuitem]:hover,.haven-context-menu>[role=menuitem]:focus-visible{background:#344968;outline-offset:-2px}.haven-context-menu>[role=separator]{height:1px;background:#35435b;margin:6px}.context-heading{font-size:12px;font-weight:600;padding:7px 10px;overflow-wrap:anywhere}.context-heading>small{display:block;color:#8da5ca;font-weight:400;font-size:10px;margin-top:3px}.context-volume{display:grid;grid-template-columns:1fr auto;gap:8px;font-size:11px;padding:9px 10px}.context-volume>input{grid-column:1/-1;width:100%;accent-color:var(--accent)}.context-note{padding:4px 10px 8px;font-size:10px;color:#90a5c7}.person-tile{position:relative}.person-tile>.participant-more{position:absolute;right:8px;top:8px;padding:5px;border-radius:4px;color:#8fa5c7}.person-tile>.participant-more:hover{background:#344966;color:#fff}.person-tile.speaking>.avatar-button>.avatar{box-shadow:0 0 0 3px #81c6a6}.moderation-label{font-size:10px;color:#dfbba2}
-.enhanced-profile{gap:12px}.profile-picture-button{position:relative;padding:0;border-radius:50%;align-self:center}.profile-picture-button>svg{position:absolute;bottom:1px;right:0;background:#344b6e;border-radius:5px;padding:3px;width:24px;height:24px;color:#dbe7ff}.username-copy{display:flex;align-items:center;justify-content:center;gap:8px;color:#92abd0;font-size:12px;user-select:text}.profile-badges{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}.profile-badges>span{font-size:10px;padding:5px 8px;border:1px solid #3f5471;border-radius:5px;color:#b7cce9}.profile-about{align-self:stretch;text-align:left;padding:14px;border:1px solid #3b506e;background:#1b2c44;border-radius:7px}.profile-about h3{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#95accb;margin:0 0 8px}.profile-about h3:not(:first-child){margin-top:17px}.profile-about p{font-size:12px;line-height:1.7;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.profile-copy-id{font-size:10px;align-self:center}.profile-image-viewer{display:flex;justify-content:center;align-items:center;min-height:200px;max-height:60vh;overflow:auto;border-radius:7px;background:#101a2a;padding:12px}.profile-image-viewer img{display:block;max-width:100%;max-height:55vh;width:auto;height:auto;object-fit:contain}.profile-image-viewer.actual-size{display:block}.profile-image-viewer.actual-size img{max-width:none;max-height:none;width:auto;height:auto;margin:auto}.image-viewer-actions{display:flex;align-items:center;gap:12px;margin:14px 0;flex-wrap:wrap}.image-viewer-actions>span{flex:1;font-size:11px;color:#8fa8cc}.image-viewer-actions>a{display:flex;align-items:center;gap:6px;font-size:11px}.image-viewer-actions>.secondary{font-size:11px;padding:8px 11px}
+.enhanced-profile{gap:12px}.profile-picture-button{position:relative;padding:0;border-radius:50%;align-self:center}.profile-picture-button>svg{position:absolute;bottom:1px;right:0;background:#344b6e;border-radius:5px;padding:3px;width:24px;height:24px;color:#dbe7ff}.username-copy{display:flex;align-items:center;justify-content:center;gap:8px;color:#92abd0;font-size:12px;user-select:text}.profile-about{align-self:stretch;text-align:left;padding:14px;border:1px solid #3b506e;background:#1b2c44;border-radius:7px}.profile-about h3{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#95accb;margin:0 0 8px}.profile-about h3:not(:first-child){margin-top:17px}.profile-about p{font-size:12px;line-height:1.7;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.profile-copy-id{font-size:10px;align-self:center}
 .shortcut-field{display:flex;flex-direction:column;gap:8px;font-size:12px}.shortcut-controls{display:flex;gap:7px}.shortcut-controls>button:first-child{flex:1;min-width:0;border:1px solid #4e6386;border-radius:6px;padding:11px;text-align:left;background:#192b44;overflow-wrap:anywhere}.shortcut-controls>button[aria-pressed=true]{border-color:#a8bff0;background:#2d4366;color:#e4edff}.shortcut-controls>button:last-child{padding:8px;font-size:11px;color:#9db3d6}.shortcut-field>small{font-size:10px;color:#8da8cc;line-height:1.6}
 @media(max-width:700px){.community-settings-tabs button{padding:8px;font-size:11px}.community-settings-summary h3{font-size:16px}.image-viewer-actions>span{flex-basis:100%}.haven-context-menu{width:250px}.profile-about p{font-size:11px}}
+
+/* ==========================================================================
+   Zenith Minimal — Server Settings & Member Permissions Modal
+   Stitch Project: 11165322381747399297
+   Screen ID: ff7323b8d23241eba705c41cd18cf057
+   ========================================================================== */
+
+dialog.modal.zenith-server-settings-modal {
+  width: 960px !important;
+  max-width: min(960px, calc(100vw - 32px)) !important;
+  height: 700px !important;
+  max-height: min(700px, calc(100vh - 32px)) !important;
+  padding: 0 !important;
+  background: #151821 !important;
+  border: 1px solid #2B3240 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.85) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+dialog.modal.zenith-server-settings-modal > header {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.zenith-server-settings-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  background: #151821;
+  color: #E1E2EB;
+  font-family: 'Inter', system-ui, sans-serif;
+  gap: 0 !important;
+}
+
+/* 1. Server Summary Header */
+.zenith-server-header {
+  background: #101319;
+  border-bottom: 1px solid #2B3240;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+.zenith-server-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.zenith-server-header-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  border: 1px solid rgba(69, 223, 164, 0.3);
+  background: linear-gradient(135deg, #00452E 0%, #003825 50%, #101319 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.05);
+}
+
+.zenith-server-header-icon-wrap .community-icon {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  background: transparent;
+}
+
+.zenith-server-header-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.zenith-server-header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.zenith-server-header-title {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #E1E2EB;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zenith-server-header-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  background: rgba(69, 223, 164, 0.1);
+  color: #45DFA4;
+  border: 1px solid rgba(69, 223, 164, 0.2);
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.zenith-server-header-subtitle {
+  font-size: 12px;
+  color: #90909A;
+  margin: 2px 0 0 0;
+  font-weight: 400;
+}
+
+.zenith-server-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.zenith-server-copy-btn {
+  font-size: 12px;
+  font-weight: 500;
+  color: #C0C1FF;
+  background: rgba(192, 193, 255, 0.1);
+  border: 1px solid rgba(192, 193, 255, 0.2);
+  border-radius: 6px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+
+.zenith-server-copy-btn:hover {
+  background: rgba(192, 193, 255, 0.2);
+  color: #FFFFFF;
+}
+
+.zenith-server-copy-btn:active {
+  transform: scale(0.98);
+}
+
+.zenith-server-header-divider {
+  height: 16px;
+  width: 1px;
+  background: #2B3240;
+  margin: 0 4px;
+}
+
+.zenith-server-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #90909A;
+  background: transparent;
+  cursor: pointer;
+  border: none;
+  transition: color 0.15s, background 0.15s;
+}
+
+.zenith-server-close-btn:hover {
+  color: #E1E2EB;
+  background: #1D2026;
+}
+
+/* 2. Horizontal Navigation Tabs */
+.zenith-server-nav {
+  height: 44px;
+  padding: 0 24px;
+  background: #101319;
+  border-bottom: 1px solid #2B3240;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  font-size: 14px;
+  flex-shrink: 0;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.zenith-server-nav-tab {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #90909A;
+  font-weight: 500;
+  font-size: 14px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.zenith-server-nav-tab:hover {
+  color: #C7C5D0;
+}
+
+.zenith-server-nav-tab.active {
+  color: #E1E2EB;
+  font-weight: 600;
+  border-bottom-color: #C0C1FF;
+}
+
+.zenith-nav-tab-icon {
+  color: #C0C1FF;
+}
+
+.zenith-nav-count-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #1D2026;
+  color: #C7C5D0;
+  margin-left: 2px;
+}
+
+/* Error Banner */
+.zenith-server-error-banner {
+  background: rgba(147, 0, 10, 0.25);
+  border-bottom: 1px solid rgba(255, 180, 171, 0.3);
+  color: #FFB4AB;
+  font-size: 12px;
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 3. Main Content Area */
+.zenith-server-content {
+  flex: 1;
+  min-height: 0;
+  padding: 24px;
+  overflow-y: auto;
+  background: #151821;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.zenith-server-content::-webkit-scrollbar {
+  width: 6px;
+}
+.zenith-server-content::-webkit-scrollbar-track {
+  background: #151821;
+}
+.zenith-server-content::-webkit-scrollbar-thumb {
+  background: #272A30;
+  border-radius: 3px;
+}
+.zenith-server-content::-webkit-scrollbar-thumb:hover {
+  background: #32353B;
+}
+
+/* Tab: Members */
+.zenith-tab-members {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 100%;
+}
+
+.zenith-members-header {
+  margin-bottom: 20px;
+}
+
+.zenith-members-title {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #E1E2EB;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.zenith-members-desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #90909A;
+  margin-top: 6px;
+  max-width: 680px;
+}
+
+.zenith-members-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.zenith-search-input-wrap {
+  position: relative;
+  flex: 1;
+  max-width: 380px;
+}
+
+.zenith-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #918F9A;
+  pointer-events: none;
+}
+
+.zenith-search-input {
+  width: 100%;
+  background: #101319;
+  border: 1px solid #2B3240;
+  border-radius: 6px;
+  padding: 7px 12px 7px 32px;
+  font-size: 12px;
+  color: #E1E2EB;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.zenith-search-input::placeholder {
+  color: #90909A;
+}
+
+.zenith-search-input:focus {
+  border-color: #C0C1FF;
+  box-shadow: 0 0 0 1px #C0C1FF;
+}
+
+.zenith-members-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: #90909A;
+  white-space: nowrap;
+}
+
+.zenith-count-number {
+  color: #E1E2EB;
+  font-weight: 500;
+}
+
+.zenith-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.zenith-member-row,
+.permission-row.zenith-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  gap: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(43, 50, 64, 0.4);
+  background: transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.zenith-member-row:hover,
+.permission-row.zenith-member-row:hover {
+  background: #191C22;
+  border-color: rgba(43, 50, 64, 0.7);
+}
+
+.zenith-member-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.zenith-member-names {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.zenith-member-primary-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zenith-member-display-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #E1E2EB;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zenith-member-you-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #918F9A;
+}
+
+.zenith-member-username {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: #90909A;
+}
+
+.zenith-member-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.zenith-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.zenith-status-pill.muted {
+  background: rgba(255, 185, 95, 0.1);
+  border: 1px solid rgba(255, 185, 95, 0.2);
+  color: #FFB95F;
+}
+
+.zenith-status-pill.deafened {
+  background: rgba(147, 0, 10, 0.2);
+  border: 1px solid rgba(255, 180, 171, 0.2);
+  color: #FFB4AB;
+}
+
+.zenith-owner-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #C0C1FF;
+  background: rgba(192, 193, 255, 0.1);
+  border: 1px solid rgba(192, 193, 255, 0.2);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.zenith-role-dropdown-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+dialog.modal.zenith-server-settings-modal .zenith-role-dropdown-wrap select,
+.zenith-role-dropdown-wrap select {
+  background: #101319;
+  border: 1px solid #2B3240;
+  border-radius: 6px;
+  color: #E1E2EB;
+  font-size: 12px;
+  padding: 6px 28px 6px 12px;
+  min-width: 92px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+dialog.modal.zenith-server-settings-modal .zenith-role-dropdown-wrap select:hover,
+.zenith-role-dropdown-wrap select:hover {
+  border-color: #918F9A;
+}
+
+dialog.modal.zenith-server-settings-modal .zenith-role-dropdown-wrap select:focus,
+.zenith-role-dropdown-wrap select:focus {
+  border-color: #C0C1FF;
+}
+
+.zenith-role-chevron {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #918F9A;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.zenith-role-static-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  background: #101319;
+  border: 1px solid #2B3240;
+  color: #C7C5D0;
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.zenith-member-remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  color: #90909A;
+  background: transparent;
+  cursor: pointer;
+  border: none;
+  transition: color 0.15s, background 0.15s;
+}
+
+.zenith-member-remove-btn:hover {
+  color: #FFB4AB;
+  background: rgba(147, 0, 10, 0.2);
+}
+
+.zenith-btn-placeholder {
+  width: 28px;
+  height: 28px;
+}
+
+.zenith-members-notice {
+  margin-top: auto;
+  padding-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: #908FA0;
+}
+
+.zenith-notice-icon {
+  color: #918F9A;
+  flex-shrink: 0;
+}
+
+/* Tab: Overview */
+.zenith-tab-overview {
+  display: flex;
+  flex-direction: column;
+}
+
+.zenith-overview-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.zenith-overview-form label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: #90909A;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.zenith-overview-form input,
+.zenith-overview-form textarea {
+  background: #101319;
+  border: 1px solid #2B3240;
+  border-radius: 6px;
+  color: #E1E2EB;
+  padding: 10px 14px;
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.zenith-overview-form input:focus,
+.zenith-overview-form textarea:focus {
+  border-color: #C0C1FF;
+  box-shadow: 0 0 0 1px #C0C1FF;
+}
+
+.zenith-save-btn {
+  align-self: flex-start;
+  background: #C0C1FF;
+  color: #131449;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.zenith-save-btn:hover {
+  background: #E1E0FF;
+}
+
+.zenith-icon-upload-card {
+  background: #101319;
+  border: 1px solid #2B3240;
+  border-radius: 8px;
+  padding: 18px;
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.zenith-icon-upload-card h3 {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #E1E2EB;
+  margin: 0;
+}
+
+.zenith-upload-btn {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #272A30;
+  color: #E1E2EB;
+  border: 1px solid #2B3240;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.zenith-upload-btn:hover:not(:disabled) {
+  background: #32353B;
+}
+
+.zenith-metadata-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #2B3240;
+  font-size: 12px;
+  color: #90909A;
+}
+
+/* 4. Danger Zone Footer */
+.zenith-server-footer {
+  background: #101319;
+  border-top: 1px solid #2B3240;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+.zenith-footer-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zenith-warning-icon {
+  color: #FFB4AB;
+  flex-shrink: 0;
+}
+
+.zenith-warning-text {
+  font-size: 12px;
+  color: #90909A;
+  margin: 0;
+}
+
+.zenith-danger-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #FFB4AB;
+  background: transparent;
+  border: 1px solid rgba(255, 180, 171, 0.4);
+  border-radius: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+
+.zenith-danger-btn:hover {
+  background: rgba(147, 0, 10, 0.3);
+}
+
+.zenith-danger-btn:active {
+  transform: scale(0.98);
+}
+
+/* Responsive adjustments */
+@media (max-width: 800px) {
+  .zenith-server-header {
+    padding: 14px 18px;
+  }
+  .zenith-server-nav {
+    padding: 0 18px;
+    gap: 20px;
+  }
+  .zenith-server-content {
+    padding: 18px;
+  }
+  .zenith-server-footer {
+    padding: 14px 18px;
+  }
+  .zenith-search-input-wrap {
+    max-width: 240px;
+  }
+}
+
+@media (max-width: 640px) {
+  .zenith-server-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .zenith-server-header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .zenith-server-nav {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .zenith-server-nav::-webkit-scrollbar {
+    display: none;
+  }
+  .zenith-members-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .zenith-search-input-wrap {
+    max-width: 100%;
+  }
+  .zenith-member-row,
+  .permission-row.zenith-member-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .zenith-member-identity {
+    width: 100%;
+    min-width: 0;
+  }
+  .zenith-member-controls {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+  .zenith-server-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .zenith-danger-btn {
+    align-self: flex-start;
+  }
+}
+
+@media (max-height: 640px) {
+  .zenith-server-header {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .zenith-server-content {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .zenith-members-notice {
+    padding-top: 12px;
+  }
+  .zenith-server-footer {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+}

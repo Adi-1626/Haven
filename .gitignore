@@ -22,5 +22,42 @@ playwright-report/
 release/
 *.log
 
+# Generated evidence, agent scratch space and tool caches (kept on disk, never committed)
+artifacts/
+output/
+scratch/
+docs/screenshots/
+apps/*/test-artifacts/
+.wrangler/
+/*.png
+
+# Local agent connection settings can contain credentials; installed skill bundles are not app source.
+/.codex/
+/.agents/skills/
+# New benchmark output stays local (previously tracked baselines remain tracked).
+/measurements/
+
+# Local profiles, databases, credentials and generated Windows/archive outputs.
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+*.db-wal
+*.db-shm
+*.db-journal
+auth-vault.json
+connection.json
+*.pfx
+*.p12
+*.key
+*.exe
+*.7z
+*.zip
+
 
 

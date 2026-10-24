@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "dev:hosted": "vite --host 127.0.0.1 --mode hosted",
+    "dev:hosted": "node ../../scripts/hosted-target-guard.mjs -- vite --host 127.0.0.1 --mode hosted",
+    "dev:ui": "vite --config vite.config.ui.ts --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit",
@@ -13,9 +14,12 @@
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
     "@fontsource/manrope": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
     "@haven/shared": "*",
-    "@supabase/supabase-js": "^2.49.1",
+    "@supabase/supabase-js": "2.50.0",
     "lucide-react": "^0.468.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

@@ -1,15 +1,12 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { Bootstrap } from '@haven/shared/types';
+import { registerLocal } from './local-auth';
 
 const password = 'Haven-Communication-2026';
 const suffix = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
 async function register(page: Page, username: string, navigate = true) {
-  if (navigate) await page.goto('/');
-  await page.getByLabel('DISPLAY NAME', { exact: true }).fill(username);
-  await page.getByLabel('USERNAME', { exact: true }).fill(username);
-  await page.getByLabel('PASSWORD', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Create your account', exact: true }).click();
+  await registerLocal(page, username, { navigate, password });
 }
 
 async function bootstrap(page: Page): Promise<Bootstrap> {
@@ -100,11 +97,11 @@ test('UI invitation survives registration, friend requests update both clients, 
   await page.getByRole('button', { name: 'Create a server', exact: true }).first().click();
   await page.getByLabel('SERVER NAME').fill(communityName);
   await page.getByRole('button', { name: 'Create server', exact: true }).click();
-  await page.getByRole('button', { name: /Invite your people/ }).click();
+  await page.getByRole('button', { name: 'Invite people', exact: true }).click();
   await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
   const inviteURL = await page.getByRole('textbox', { name: 'Invitation link', exact: true }).inputValue();
   expect(new URL(inviteURL).pathname).toMatch(/^\/invite\/[A-Za-z0-9_-]+$/);
-  await expect(page.getByText('This link works on this computer only.', { exact: false })).toBeVisible();
+  await expect(page.getByText('This invitation works only on this computer.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
   const owner = (await bootstrap(page)).user;
   const otherContext = await browser.newContext();
@@ -122,16 +119,16 @@ test('UI invitation survives registration, friend requests update both clients, 
     expect(guestUser.id).not.toBe(owner.id);
     await page.getByRole('button', { name: 'Home', exact: true }).click();
     await page.getByRole('button', { name: 'Add friend', exact: true }).click();
-    await page.getByRole('textbox', { name: 'Friend username', exact: true }).fill(`@${guestName.toUpperCase()}`);
+    await page.getByRole('textbox', { name: 'Username', exact: true }).fill(`@${guestName.toUpperCase()}`);
     await page.getByRole('button', { name: 'Send friend request', exact: true }).click();
     await expect(page.getByRole('button', { name: 'View pending requests', exact: true })).toBeVisible();
     expect((await page.request.post('/api/friends/requests', { data: { username: guestName } })).status()).toBe(409);
     expect((await page.request.post('/api/friends/requests', { data: { username: ownerName } })).status()).toBe(400);
     await page.getByRole('button', { name: 'View pending requests', exact: true }).click();
     await guest.getByRole('button', { name: 'Home', exact: true }).click();
-    await guest.getByRole('button', { name: /^Pending/ }).click();
+    await guest.getByRole('tab', { name: /^Pending/ }).click();
     await guest.getByRole('button', { name: `Accept request from ${ownerName}`, exact: true }).click();
-    await page.getByRole('button', { name: 'All friends', exact: true }).click();
+    await page.getByRole('tab', { name: /^All Friends/ }).click();
     await expect(page.getByRole('button', { name: `Message ${guestName}`, exact: true })).toBeVisible();
     await page.getByRole('button', { name: `Message ${guestName}`, exact: true }).click();
     await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Friends can talk across independent sessions');
@@ -148,7 +145,7 @@ test('UI invitation survives registration, friend requests update both clients, 
     expect((await guest.request.delete(`/api/users/${owner.id}/block`)).ok()).toBe(true);
     expect((await page.request.post('/api/friends/requests', { data: { username: guestName } })).status()).toBe(201);
     await guest.getByRole('button', { name: 'Home', exact: true }).click();
-    await guest.getByRole('button', { name: /^Pending/ }).click();
+    await guest.getByRole('tab', { name: /^Pending/ }).click();
     await guest.getByRole('button', { name: `Decline request from ${ownerName}`, exact: true }).click();
     await expect.poll(async () => (await bootstrap(page)).requests.length).toBe(0);
     expect((await page.request.post('/api/friends/requests', { data: { username: guestName } })).status()).toBe(201);
@@ -231,7 +228,7 @@ test('persistent community voice, microphone test playback, fullscreen streams a
     await page.getByRole('button', { name: 'voice & video', exact: true }).click();
     await page.getByRole('combobox', { name: 'Noise suppression mode', exact: true }).selectOption('enhanced');
     await expect(page.getByRole('status').filter({ hasText: 'Outgoing microphone:' })).toContainText('RNNoise active', { timeout: 15_000 });
-    const suppression = page.getByRole('checkbox', { name: /^Noise suppression/ });
+    const suppression = page.getByRole('switch', { name: 'Noise suppression', exact: true });
     await suppression.uncheck();
     await expect(page.getByRole('status').filter({ hasText: 'Outgoing microphone:' })).toContainText('off');
     await suppression.check();
@@ -266,31 +263,37 @@ test('persistent community voice, microphone test playback, fullscreen streams a
       return quietSamples;
     }, { intervals: [250], timeout: 10_000 }).toBeGreaterThanOrEqual(4);
     const silentEnergy = await receivedAudioEnergy(guest);
+    const remoteSoundsBefore = await guest.evaluate(() => (window as unknown as { __soundStarts: number }).__soundStarts);
     await page.locator('.voice-connected').getByRole('button', { name: 'Soundboard', exact: true }).click();
     await page.getByRole('button', { name: 'Communication chime', exact: true }).click();
     await expect.poll(() => page.evaluate(() => (window as unknown as { __soundStarts: number }).__soundStarts)).toBeGreaterThan(0);
-    await expect.poll(() => receivedAudioEnergy(guest), { timeout: 10_000 }).toBeGreaterThan(silentEnergy + .0001);
+    // Soundboard events are decoded and played by each receiver's Web Audio output;
+    // they are independent of the sender's microphone gain and voice RTP track.
+    await expect.poll(() => guest.evaluate(() => (window as unknown as { __soundStarts: number }).__soundStarts), { timeout: 10_000 }).toBeGreaterThan(remoteSoundsBefore);
     const soundEnergy = await receivedAudioEnergy(guest) - silentEnergy;
-    await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
+    const remoteSoundStarts = await guest.evaluate(() => (window as unknown as { __soundStarts: number }).__soundStarts) - remoteSoundsBefore;
+    await page.getByRole('button', { name: 'Close soundboard dialog', exact: true }).click();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('button', { name: 'voice & video', exact: true }).click();
     await page.getByRole('slider', { name: 'Input volume', exact: true }).fill('1');
     await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
     await page.locator('.voice-connected').getByRole('button', { name: 'Share screen', exact: true }).click();
     await expect(page.locator('.voice-connected').getByRole('button', { name: 'Stop sharing', exact: true })).toBeVisible();
-    await guest.getByRole('button', { name: `Watch ${ownerName}`, exact: true }).click();
+    await guest.locator('.stream-available-bar .stream-watch-btn').click();
+    await expect(guest.locator('.remote-screen video')).toBeVisible();
+    expect(await guest.evaluate(() => document.fullscreenElement === null)).toBe(true);
+    await guest.locator('.stream-fullscreen-btn').click();
     const viewer = guest.getByRole('dialog', { name: `${ownerName} stream viewer`, exact: true });
     await expect.poll(() => viewer.locator('video').evaluate(element => ({ width: (element as HTMLVideoElement).videoWidth, height: (element as HTMLVideoElement).videoHeight })), { timeout: 20_000 }).toEqual({ width: 960, height: 540 });
-    await viewer.getByRole('button', { name: 'Enter fullscreen', exact: true }).click();
     await expect.poll(() => guest.evaluate(() => document.fullscreenElement?.classList.contains('stream-viewer') || false)).toBe(true);
     await viewer.getByRole('button', { name: 'Exit fullscreen', exact: true }).click();
     await expect.poll(() => guest.evaluate(() => document.fullscreenElement === null)).toBe(true);
-    await viewer.getByRole('button', { name: 'Return to voice room', exact: true }).click();
+    await viewer.getByRole('button', { name: 'Close stream viewer', exact: true }).click();
     await expect(viewer).toHaveCount(0);
-    await guest.getByRole('button', { name: `Watch ${ownerName}`, exact: true }).click();
+    await guest.locator('.stream-fullscreen-btn').click();
     await page.locator('.voice-connected').getByRole('button', { name: 'Stop sharing', exact: true }).click();
     await expect(viewer).toHaveCount(0);
-    await expect(guest.getByRole('button', { name: `Watch ${ownerName}`, exact: true })).toHaveCount(0);
+    await expect(guest.locator('.stream-available-bar')).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => (window as unknown as { __captures: MediaStream[] }).__captures.every(stream => stream.getTracks().every(track => track.readyState === 'ended')))).toBe(true);
     await expect(page.locator('.voice-connected')).toBeVisible(); await expect(guest.locator('.voice-connected')).toBeVisible();
     expect((await bootstrap(guest)).voice).toHaveLength(2);
@@ -302,6 +305,6 @@ test('persistent community voice, microphone test playback, fullscreen streams a
     await guest.getByRole('button', { name: 'Disconnect voice', exact: true }).click();
     await expect.poll(async () => (await bootstrap(guest)).voice.length).toBe(0);
     expect(errors).toEqual([]);
-    await info.attach('communication-verification', { body: JSON.stringify({ syntheticMicrophone: true, syntheticScreen: '960x540 at 30 fps', fullscreenAPI: true, actualRtp: true, audioBefore: before, audioAfterStop: afterStop, receivedSoundboardEnergyAboveSilentMicrophone: soundEnergy, hardwareAudioTested: false }, null, 2), contentType: 'application/json' });
+    await info.attach('communication-verification', { body: JSON.stringify({ syntheticMicrophone: true, syntheticScreen: '960x540 at 30 fps', fullscreenAPI: true, actualRtp: true, audioBefore: before, audioAfterStop: afterStop, microphoneRtpEnergyChangeDuringSound: soundEnergy, receiverWebAudioSoundStarts: remoteSoundStarts, hardwareAudioTested: false }, null, 2), contentType: 'application/json' });
   } finally { await otherContext.close(); }
 });

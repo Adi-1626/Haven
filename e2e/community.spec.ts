@@ -55,7 +55,14 @@ test('profiles update throughout active voice, original pictures open, local aud
     const profile = state.guest.getByRole('dialog', { name: 'Profile', exact: true });
     await expect(profile.locator('.avatar img')).toHaveAttribute('src', 'https://haven-image.test/before.png');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByLabel('AVATAR', { exact: false }).fill('https://haven-image.test/original.png');
+    const avatarInput = page.getByRole('textbox', { name: 'Avatar', exact: true });
+    if (!(await avatarInput.isVisible().catch(() => false))) {
+      const toggleBtn = page.getByRole('button', { name: /use emoji or url/i });
+      if (await toggleBtn.isVisible().catch(() => false)) {
+        await toggleBtn.click();
+      }
+    }
+    await avatarInput.fill('https://haven-image.test/original.png');
     await page.getByLabel('ABOUT YOU').fill('Live profile after');
     await page.getByRole('button', { name: 'Save profile', exact: true }).click();
     await expect(profile.locator('.avatar img')).toHaveAttribute('src', 'https://haven-image.test/original.png');
@@ -63,19 +70,21 @@ test('profiles update throughout active voice, original pictures open, local aud
     await expect(state.guest.locator('.person-tile').filter({ hasText: 'Profile Owner' }).locator('.avatar img')).toHaveAttribute('src', 'https://haven-image.test/original.png');
     await expect(state.guest.locator('.voice-roster').getByRole('button', { name: /Profile Owner in Lounge/ }).locator('img')).toHaveAttribute('src', 'https://haven-image.test/original.png');
     await profile.getByRole('button', { name: "View Profile Owner's original profile picture", exact: true }).click();
-    const picture = state.guest.getByRole('dialog', { name: 'Profile Owner — original picture', exact: true });
+    const picture = state.guest.getByRole('dialog', { name: 'Profile Owner — inspection', exact: true });
     await expect(picture.getByRole('img', { name: "Profile Owner's full profile picture", exact: true })).toHaveAttribute('src', 'https://haven-image.test/original.png');
     await expect.poll(() => picture.getByRole('img', { name: "Profile Owner's full profile picture", exact: true }).evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1024);
     await picture.getByRole('button', { name: 'Actual size', exact: true }).click();
     await expect(picture.locator('.actual-size')).toBeVisible();
-    await picture.getByRole('button', { name: 'Close dialog', exact: true }).click();
+    await picture.getByRole('button', { name: 'Close Lightbox', exact: true }).click();
     await profile.getByRole('button', { name: 'Close dialog', exact: true }).click();
     await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
 
     const local = await userMenu(state.guest, 'Profile Owner');
     await expect(local.getByRole('menuitem', { name: 'Server mute', exact: true })).toHaveCount(0);
     await local.getByRole('slider', { name: 'Profile Owner volume', exact: true }).fill('0.3');
-    await expect.poll(() => state.guest.evaluate(() => (window as unknown as { communityAudio: HTMLAudioElement[] }).communityAudio.filter(audio => audio.srcObject).map(audio => audio.volume))).toEqual([0.3]);
+    // The negotiated screen-audio lane has its own muted Audio element even
+    // before anyone shares. Assert the audible microphone, not element count.
+    await expect.poll(() => state.guest.evaluate(() => (window as unknown as { communityAudio: HTMLAudioElement[] }).communityAudio.filter(audio => audio.srcObject && !audio.muted).map(audio => audio.volume))).toEqual([0.3]);
     await local.getByRole('menuitem', { name: 'Mute locally', exact: true }).click();
     await expect(local.getByRole('menuitem', { name: 'Unmute locally', exact: true })).toBeVisible();
     await expect.poll(() => state.guest.evaluate(() => (window as unknown as { communityAudio: HTMLAudioElement[] }).communityAudio.filter(audio => audio.srcObject).every(audio => audio.muted))).toBe(true);
