@@ -43,7 +43,7 @@
     "test:desktop-clients": "node scripts/verify-desktop-clients.mjs",
     "test:desktop-gaming": "node scripts/verify-desktop-gaming.mjs",
     "measure:background": "node scripts/measure-background.mjs",
-    "check": "npm run check --workspace=@haven/shared && npm run check --workspace=@haven/backend && npm run check --workspace=@haven/web"
+    "check": "npm run build --workspace=@haven/shared && npm run check --workspace=@haven/backend && npm run check --workspace=@haven/web"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",
