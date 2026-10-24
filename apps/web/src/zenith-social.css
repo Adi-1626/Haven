@@ -939,11 +939,6 @@ dialog.modal:has(.zenith-profile-dual-workspace) > header {
   color: #2b3240;
 }
 
-.zenith-inspection-shortcuts .brand {
-  color: #c0c1ff;
-  font-weight: 500;
-}
-
 /* Dual-Workspace Responsive Adaptations */
 @media (max-width: 1180px) {
   .zenith-profile-dual-workspace {

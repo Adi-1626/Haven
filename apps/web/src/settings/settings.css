@@ -94,20 +94,6 @@ dialog.settings-dialog > header.settings-dialog-header,
   align-items: center !important;
 }
 
-.settings-version-pill {
-  font-family: var(--font-mono, 'JetBrains Mono', monospace) !important;
-  font-size: 11px !important;
-  font-weight: 500 !important;
-  padding: 3px 8px !important;
-  border-radius: var(--radius-xs, 4px) !important;
-  background: var(--zenith-elevated, #1d2026) !important;
-  border: 1px solid var(--zenith-line, #282c35) !important;
-  color: var(--zenith-text-muted, #908fa0) !important;
-  line-height: 1 !important;
-  display: inline-flex !important;
-  align-items: center !important;
-}
-
 .settings-active-category-crumb {
   display: inline-flex !important;
   flex-direction: row !important;

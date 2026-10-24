@@ -463,7 +463,6 @@ export function SettingsDialog({
               Settings
             </h2>
             <span className="visually-hidden">Your settings</span>
-            <span className="settings-version-pill">v0.4.1</span>
           </div>
 
           <div className="settings-active-category-crumb">

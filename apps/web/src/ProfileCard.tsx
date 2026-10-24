@@ -543,8 +543,6 @@ export default function ProfileCard({
             <span>
               <kbd>TAB</kbd> switch pane
             </span>
-            <span className="divider">|</span>
-            <span className="brand">Zenith Minimal UI</span>
           </div>
         </div>
       </Modal>

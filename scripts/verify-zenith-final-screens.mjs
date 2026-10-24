@@ -206,15 +206,10 @@ async function run() {
       loadingOverlay.style.inset = '0';
       loadingOverlay.style.zIndex = '99999';
       loadingOverlay.innerHTML = `
-        <div class="zenith-loading-glyph-wrap" aria-hidden="true">
-          <span class="zenith-starburst">✳</span>
-        </div>
+        <img class="zenith-loading-logo" src="/haven-wordmark.webp" srcset="/haven-wordmark.webp 1x, /haven-wordmark@2x.webp 2x, /haven-wordmark@3x.webp 3x" alt="" width="252" height="84" draggable="false">
         <div class="zenith-loading-text-wrap">
           <span class="zenith-loading-ping-dot" aria-hidden="true"></span>
           <span>Finding your place…</span>
-        </div>
-        <div class="zenith-loading-version-badge" aria-hidden="true">
-          ZENITH 0.4.1
         </div>
       `;
       document.body.appendChild(loadingOverlay);

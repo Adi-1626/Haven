@@ -593,24 +593,15 @@ dialog.modal.zenith-group-modal {
   gap: 20px;
 }
 
-.zenith-loading-glyph-wrap {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  background: #151821;
-  border: 1px solid #2b3240;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  box-shadow: 0 0 30px rgba(192, 193, 255, 0.08);
-}
-
-.zenith-starburst {
-  font-size: 24px;
-  line-height: 1;
-  color: #c0c1ff;
-  animation: pulse 2.4s ease-in-out infinite;
+.zenith-loading-logo {
+  /* The artwork carries transparent padding, so the visible wordmark is ~170px wide. */
+  height: 84px;
+  width: auto;
+  max-width: min(252px, 72vw);
+  object-fit: contain;
+  filter: drop-shadow(0 2px 14px rgba(192, 193, 255, 0.35));
+  user-select: none;
+  animation: zenith-loading-breathe 2.4s ease-in-out infinite;
 }
 
 .zenith-loading-text-wrap {
@@ -627,17 +618,19 @@ dialog.modal.zenith-group-modal {
   border-radius: 50%;
   background: #c0c1ff;
   box-shadow: 0 0 8px #c0c1ff;
-  animation: pulse 1.5s infinite;
+  animation: zenith-loading-breathe 1.5s ease-in-out infinite;
 }
 
-.zenith-loading-version-badge {
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 10px;
-  color: #71717a;
-  background: #101319;
-  border: 1px solid #2b3240;
-  padding: 2px 8px;
-  border-radius: 4px;
+@keyframes zenith-loading-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zenith-loading-logo,
+  .zenith-loading-ping-dot {
+    animation: none;
+  }
 }
 
 /* Responsive adjustments */

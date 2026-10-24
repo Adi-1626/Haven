@@ -122,20 +122,6 @@ dialog.modal.zenith-server-settings-modal > header {
   text-overflow: ellipsis;
 }
 
-.zenith-server-header-badge {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  text-transform: uppercase;
-  background: rgba(69, 223, 164, 0.1);
-  color: #45DFA4;
-  border: 1px solid rgba(69, 223, 164, 0.2);
-  padding: 2px 8px;
-  border-radius: 4px;
-  letter-spacing: 0.05em;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
 .zenith-server-header-subtitle {
   font-size: 12px;
   color: #90909A;

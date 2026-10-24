@@ -489,15 +489,10 @@ export default function App() {
   if (loading) {
     return (
       <div className="loading zenith-app-loading" role="status" aria-label="Loading Haven">
-        <div className="zenith-loading-glyph-wrap" aria-hidden="true">
-          <span className="zenith-starburst">✳</span>
-        </div>
+        <img className="zenith-loading-logo" src="/haven-wordmark.webp" srcSet="/haven-wordmark.webp 1x, /haven-wordmark@2x.webp 2x, /haven-wordmark@3x.webp 3x" alt="" width={252} height={84} draggable={false} />
         <div className="zenith-loading-text-wrap">
           <span className="zenith-loading-ping-dot" aria-hidden="true" />
           <span>Finding your place…</span>
-        </div>
-        <div className="zenith-loading-version-badge" aria-hidden="true">
-          ZENITH 0.4.1
         </div>
       </div>
     );

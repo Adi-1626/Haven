@@ -141,7 +141,6 @@ export default function ServerSettings({
           <div className="zenith-server-header-meta">
             <div className="zenith-server-header-title-row">
               <h1 className="zenith-server-header-title">{server.name}</h1>
-              <span className="zenith-server-header-badge">Zenith 0.4.1</span>
             </div>
             <p className="zenith-server-header-subtitle">
               {members.length} members · {server.role === 'owner' ? 'Owner' : server.role === 'admin' ? 'Moderator' : 'Member'}
