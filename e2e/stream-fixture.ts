@@ -3,18 +3,18 @@ import react from '@vitejs/plugin-react';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createApp } from '../apps/backend/src/app.js';
+import { createApp, type AppOptions } from '../apps/backend/src/app.js';
 import type { Page } from '@playwright/test';
 
 export const apiOrigin = 'http://127.0.0.1:3157';
 export const probeOrigin = 'http://127.0.0.1:3156';
 
-export async function streamFixture() {
+export async function streamFixture({ diagnosticsSink }: Pick<AppOptions, 'diagnosticsSink'> = {}) {
   // This fixture must never inherit Hosted credentials from the invoking shell.
   for (const key of Object.keys(process.env)) if (/SUPABASE|DATABASE_URL|HAVEN_MODE/.test(key)) delete process.env[key];
   const directory = mkdtempSync(path.join(tmpdir(), 'haven-streams-'));
   const start = async () => {
-    const server = createApp({ dataDir: directory, origins: [probeOrigin], supabaseVerifier: null, serveStatic: true, staticDir: path.resolve('apps/web/dist') });
+    const server = createApp({ dataDir: directory, origins: [probeOrigin], supabaseVerifier: null, diagnosticsSink, serveStatic: true, staticDir: path.resolve('apps/web/dist') });
     await new Promise<void>(resolve => server.httpServer.listen(3157, '127.0.0.1', resolve));
     return server;
   };

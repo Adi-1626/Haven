@@ -16,6 +16,7 @@ import { createInputMeter } from './input-meter';
 import { createScreenTransport } from './screen-transport';
 import { soundboardService } from './soundboard-service';
 import { createCandidateRouter, iceUfrags } from './ice-candidates';
+import { createVoiceDiagnostics, type VoiceDiagnosticType } from './voice-diagnostics';
 import { readPreferences } from './preferences';
 import type { User } from '@haven/shared/types';
 export interface MediaUser {
@@ -96,6 +97,8 @@ interface PeerConnection {
   videoTracks: Map<string, MediaStreamTrack>;
   restartTimer?: ReturnType<typeof setTimeout>;
   restartAttempts: number;
+  /** First connection attempt with this peer; kept when the connection pair is replaced. */
+  startedAt: number;
   /** Start of the current ICE checking phase (connection, local or remote ICE restart). */
   checkingSince: number;
   checkingTimer?: ReturnType<typeof setTimeout>;
@@ -257,6 +260,9 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   const leaveCued = useRef(new Set<string>());
   const audioSamples = useRef(new Map<string, number>());
   const soundboardPreviousVolume = useRef(settings.soundboardVolume > 0 ? settings.soundboardVolume : 1);
+  const [diagnostics] = useState(() => createVoiceDiagnostics(report => {
+    if (room.current && voiceSocket.current?.connected) voiceSocket.current.emit('voice:diagnostic', report);
+  }));
   errorRef.current = reportError;
   settingsRef.current = settings;
   qualityRef.current = quality;
@@ -566,6 +572,14 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     }));
     try { await sender.setParameters(parameters); } catch {}
   }
+  /** Tells the backend about a peer connection that failed or recovered; see voice-diagnostics.ts. */
+  function reportIce(record: PeerConnection, type: VoiceDiagnosticType) {
+    if (!room.current || !voiceSocket.current?.connected) return;
+    void diagnostics.report(type, record.connection, {
+      peer: record.peer.socketId, retryCount: record.restartAttempts, startedAt: record.startedAt,
+      checkingSince: record.checkingSince, everConnected: record.everConnected, resettable: record.resettable,
+    }).catch(() => {});
+  }
   function iceStuck(record: PeerConnection) {
     const state = record.connection.connectionState;
     if (state === 'failed' || state === 'disconnected') return true;
@@ -576,7 +590,10 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     clearTimeout(record.checkingTimer);
     record.checkingTimer = setTimeout(() => {
       record.checkingTimer = undefined;
-      if (records.current.get(record.peer.socketId) === record && iceStuck(record)) scheduleIceRestart(record);
+      if (records.current.get(record.peer.socketId) !== record || !iceStuck(record)) return;
+      // Failed and disconnected states are reported when they occur; this is ICE that never finished.
+      if (['new', 'connecting'].includes(record.connection.connectionState)) reportIce(record, record.restartAttempts ? 'recovery_failed' : 'ice_timeout');
+      scheduleIceRestart(record);
     }, Math.max(0, record.checkingSince + iceCheckingLimit - Date.now()));
   }
   function iceCheckingStarted(record: PeerConnection) {
@@ -597,6 +614,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       if (Date.now() - record.remoteRestartAt < iceCheckingLimit) { superviseIce(record); return; }
       if (record.restartAttempts >= maxIceRestarts) {
         record.peer.connectionError = 'Connection lost. Disconnect and rejoin voice to retry.';
+        reportIce(record, 'retries_exhausted');
         errorRef.current(`Could not restore the connection to ${record.peer.user.displayName ?? record.peer.user.name ?? 'a participant'}. Disconnect and rejoin voice to retry.`);
         refreshPeers();
         return;
@@ -624,6 +642,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     const next = createPeer(socketId, user, initiate, peerState.streamProtocol, record.resettable ? 2 : undefined);
     next.peer.state = peerState;
     next.restartAttempts = record.restartAttempts;
+    next.startedAt = record.startedAt;
     recoverStreamWatch(next);
     refreshPeers();
     return next;
@@ -868,7 +887,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     const record: PeerConnection = {
       connection, audio: new Map(), screenAudioTracks: new Set(), screenCapable: streamProtocol.current && peerProtocol === 1, makingOffer: false, ignoreOffer: false, answering: false, candidates: createCandidateRouter(), screenSenders: [],
       offerOnInitialNegotiation, signalQueue: Promise.resolve(),
-      videoTracks: new Map(), restartAttempts: 0, checkingSince: Date.now(), remoteRestartAt: -Infinity, everConnected: false, resettable: signaling === 2, congested: false,
+      videoTracks: new Map(), restartAttempts: 0, startedAt: Date.now(), checkingSince: Date.now(), remoteRestartAt: -Infinity, everConnected: false, resettable: signaling === 2, congested: false,
       peer: { socketId, user, stream: null, state: { muted: false, deafened: false, sharing: false }, volume: localPreferences.current.get(user.id)?.volume ?? 1, localMuted: localPreferences.current.get(user.id)?.muted ?? false },
     };
     records.current.set(socketId, record);
@@ -923,6 +942,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       record.peer.connectionState = connection.connectionState;
       refreshPeers();
       if (connection.connectionState === 'connected') {
+        if (record.restartAttempts) reportIce(record, 'recovered');
         record.everConnected = true;
         clearTimeout(record.restartTimer);
         clearTimeout(record.checkingTimer);
@@ -931,7 +951,11 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
         record.restartAttempts = 0;
         record.peer.connectionError = undefined;
         refreshPeers();
-      } else if (['failed', 'disconnected'].includes(connection.connectionState)) scheduleIceRestart(record);
+      } else if (['failed', 'disconnected'].includes(connection.connectionState)) {
+        // A brief disconnection usually recovers by itself; only a failure is worth reporting.
+        if (connection.connectionState === 'failed') reportIce(record, 'ice_failed');
+        scheduleIceRestart(record);
+      }
     };
     destination.current?.stream.getAudioTracks().forEach(track => {
       const sender = connection.addTrack(track, destination.current!.stream);

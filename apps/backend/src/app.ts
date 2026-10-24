@@ -13,6 +13,7 @@ import { createDatabase, type DatabaseAdapter, type UserRow, SqliteAdapter, Atta
 import { createStorage, type StorageService } from './storage/index.js';
 import { HostedProfileReviewRequiredError, SupabaseAuthVerifier } from './auth/supabase.js';
 import { assertActiveInvite, InviteUnavailableError } from './db/invites.js';
+import { createDiagnostics, type DiagnosticSink, type Severity } from './diagnostics.js';
 
 type AuthRequest = Request & { userId?: string; profile?: User; viaSupabase?: boolean };
 class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
@@ -26,6 +27,28 @@ const text = (maximum: number) => z.string().trim().min(1).max(maximum);
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 const passwordHash = (password: string, salt: string) => new Promise<Buffer>((resolve, reject) => scrypt(password, salt, 64, (error, derived) => error ? reject(error) : resolve(derived)));
 const parseCookies = (cookie = '') => Object.fromEntries(cookie.split(';').map(part => part.trim().split('=')).filter(parts => parts.length === 2));
+const count = z.number().int().min(0).max(10_000);
+const candidateCounts = z.object({ host: count, srflx: count, prflx: count, relay: count }).partial().strict();
+// Client reports of failing peer connections: states, counts and durations only.
+const voiceDiagnosticSchema = z.object({
+  v: z.literal(1),
+  type: z.enum(['ice_failed', 'ice_timeout', 'recovery_failed', 'retries_exhausted', 'recovered']),
+  peer: z.string().min(1).max(64),
+  connectionState: z.enum(['new', 'connecting', 'connected', 'disconnected', 'failed', 'closed']),
+  iceState: z.enum(['new', 'checking', 'connected', 'completed', 'disconnected', 'failed', 'closed']),
+  signalingState: z.enum(['stable', 'have-local-offer', 'have-remote-offer', 'have-local-pranswer', 'have-remote-pranswer', 'closed']),
+  gatheringState: z.enum(['new', 'gathering', 'complete']),
+  retryCount: z.number().int().min(0).max(100),
+  durationMs: z.number().int().min(0).max(86_400_000),
+  checkingMs: z.number().int().min(0).max(86_400_000).optional(),
+  everConnected: z.boolean(),
+  resettable: z.boolean(),
+  pairs: z.object({ total: count, failed: count, succeeded: count, inProgress: count, waiting: count, frozen: count, selected: z.boolean() }).partial().strict().optional(),
+  local: candidateCounts.optional(),
+  remote: candidateCounts.optional(),
+  browser: z.enum(['chromium', 'firefox', 'safari', 'other']),
+  client: z.enum(['web', 'desktop']),
+}).strict();
 const scopeSchema = z.object({ channelId: z.string().optional(), conversationId: z.string().optional() }).refine(value => Boolean(value.channelId) !== Boolean(value.conversationId), 'Choose one message destination');
 
 export interface AppOptions {
@@ -44,6 +67,8 @@ export interface AppOptions {
   heartbeat?: { interval: number; timeout: number };
   /** Overrides the configured file storage (tests use it to model signed Storage redirects). */
   storage?: StorageService;
+  /** Receives structured diagnostics instead of stdout/stderr (tests capture them). */
+  diagnosticsSink?: DiagnosticSink;
 }
 
 export function createApp({
@@ -60,6 +85,7 @@ export function createApp({
   staticDir = process.env.STATIC_DIR,
   heartbeat = { interval: 10_000, timeout: 10_000 },
   storage: optionsStorage,
+  diagnosticsSink,
 }: AppOptions = {}) {
   let configuredPublicUrl: string | undefined;
   if (publicUrl) {
@@ -133,6 +159,37 @@ export function createApp({
   // Private per-connection voice session keys. A reconnecting client presents its key so the
   // server can retire the stale socket it left behind. Never sent to other users.
   const voiceSessions = new Map<string, string>();
+
+  const diagnostics = createDiagnostics({ sink: diagnosticsSink });
+  // Pseudonymous identity of a voice participant. The session survives reconnection, the socket does not.
+  const voiceIdentity = (socketId: string, prefix?: 'peer') => ({
+    [prefix ? `${prefix}User` : 'user']: diagnostics.anonymize('u', voice.get(socketId)?.user.id ?? io.sockets.sockets.get(socketId)?.data.userId),
+    [prefix ? `${prefix}Session` : 'session']: diagnostics.anonymize('s', voiceSessions.get(socketId) ?? socketId),
+  });
+  const signalProblem = (error: unknown): [string, Severity] => {
+    if (error instanceof z.ZodError) return ['invalid_payload', 'warn'];
+    if (error instanceof SessionEnded) return ['session_ended', 'info'];
+    if (!(error instanceof ApiError)) return ['internal', 'error'];
+    if (error.status === 429) return ['rate_limited', 'warn'];
+    if (error.message === 'Voice membership changed') return ['membership_changed', 'info'];
+    if (error.message === 'Voice peer permission denied') return ['peer_unavailable', 'info'];
+    if (error.message === 'Voice peer disconnected') return ['peer_disconnected', 'info'];
+    if (error.status === 400) return ['not_in_voice', 'info'];
+    if (error.status === 401) return ['connection_closed', 'info'];
+    if (error.status === 503) return ['server_restarting', 'info'];
+    return ['access_denied', 'warn'];
+  };
+  /** A rejected signal leaves its ICE generation incomplete. Logged once per pair and cause per window. */
+  const signalRejected = (socket: Socket, payload: unknown, error: unknown) => {
+    const [errorType, severity] = signalProblem(error);
+    if (!diagnostics.enabled(severity)) return;
+    const body = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+    const target = typeof body.target === 'string' && body.target.length <= 64 ? body.target : undefined;
+    const kind = body.description ? 'description' : body.candidate ? 'candidate' : body.reset ? 'reset' : 'unknown';
+    diagnostics.log(severity, 'voice.signal_rejected', {
+      errorType, kind, room: voice.get(socket.id)?.channelId, ...voiceIdentity(socket.id), ...(target ? voiceIdentity(target, 'peer') : {}),
+    }, `${errorType}:${socket.id}>${target}`);
+  };
 
   // Access tokens explicitly logged out stay rejected until they would have expired anyway.
   const revokedAccessTokens = new Map<string, number>();
@@ -1416,11 +1473,14 @@ export function createApp({
           // voice:signal has its own burst-tolerant budget; sharing this one let chat, typing and
           // voice controls starve signaling, and a dropped candidate fails silently.
           if (name === 'voice:activity') rate(`voice-activity:${socket.id}`, 240);
+          else if (name === 'voice:diagnostic') rate(`voice-diagnostic:${socket.id}`, 30);
           else if (name !== 'voice:signal') rate(`socket:${userId}`, 300);
           const result = await handler(payload, turn);
           if (typeof ack === 'function') ack(result ?? { ok: true });
         } catch (error) {
           if (typeof ack === 'function') ack({ error: error instanceof Error ? error.message : 'Request failed' });
+          if (name === 'voice:signal') signalRejected(socket, payload, error);
+          else if (name === 'voice:diagnostic') diagnostics.log('warn', 'voice.diagnostic_rejected', { errorType: signalProblem(error)[0], ...voiceIdentity(socket.id) }, socket.id);
           if (error instanceof SessionEnded) socket.disconnect(true);
         }
         };
@@ -1521,6 +1581,8 @@ export function createApp({
       };
       voice.set(socket.id, participant);
       if (body.session) voiceSessions.set(socket.id, body.session);
+      // A client loaded before the current frontend was deployed keeps running its old signaling.
+      if (body.signaling !== 2) diagnostics.log('warn', 'voice.legacy_client', { room: current.id, signaling: body.signaling ?? 1, ...voiceIdentity(socket.id) }, userId);
       socket.join(`voice:${current.id}`);
       socket.to(`voice:${current.id}`).emit('voice:peer-joined', { ...participant, resumed: Boolean(body.resume) || replaced, entrySound: Boolean(entrySound) });
       if (entrySound) io.to(`voice:${current.id}`).emit('sound:play', { sound: sound(entrySound), userId, entry: true });
@@ -1547,7 +1609,26 @@ export function createApp({
       await channel(target.user.id, target.channelId);
       await turn;
       if (voice.get(socket.id) !== source || voice.get(body.target) !== target || source.channelId !== target.channelId) throw new ApiError(403, 'Voice membership changed');
+      // Emitting to a socket that already closed would drop the signal while acknowledging it.
+      if (!io.sockets.sockets.get(body.target)?.connected) throw new ApiError(409, 'Voice peer disconnected');
+      if (body.reset) diagnostics.log('info', 'voice.peer_reset', { room: source.channelId, ...voiceIdentity(socket.id), ...voiceIdentity(body.target, 'peer') }, `${socket.id}>${body.target}`);
       io.to(body.target).emit('voice:signal', { from: socket.id, description: body.description, candidate: body.candidate, ...(body.reset ? { reset: true } : {}) });
+    });
+
+    // A client's report of a peer connection that failed or recovered. Only enums and counts are
+    // accepted (unknown keys are rejected), so no address, SDP or credential can reach the log.
+    event('voice:diagnostic', async payload => {
+      const { v: _version, type, peer: peerId, ...report } = voiceDiagnosticSchema.parse(payload);
+      const source = voice.get(socket.id);
+      if (!source) throw new ApiError(400, 'Join voice first');
+      const peer = voice.get(peerId);
+      const present = peer?.channelId === source.channelId;
+      const severity: Severity = type === 'retries_exhausted' ? 'error' : type === 'recovered' ? 'info' : 'warn';
+      diagnostics.log(severity, type === 'recovered' ? 'voice.ice_recovered' : 'voice.ice_failure', {
+        errorType: type, room: source.channelId, ...voiceIdentity(socket.id),
+        ...(present ? voiceIdentity(peerId, 'peer') : { peerSession: 'departed' }),
+        ...report, signaling: source.signaling ?? 1, peerSignaling: present ? peer.signaling ?? 1 : undefined,
+      }, `${socket.id}>${peerId}:${type}:${report.retryCount}`);
     });
 
     let streamControlQueue = Promise.resolve<unknown>(undefined);
@@ -1698,6 +1779,7 @@ export function createApp({
   const close = async () => {
     closing = true;
     clearInterval(cleanupTimer);
+    diagnostics.close();
     await new Promise<void>(resolve => io.close(() => resolve()));
     if (httpServer.listening) await new Promise<void>((resolve, reject) => httpServer.close(error => error ? reject(error) : resolve()));
     // Socket.IO fires async disconnect cleanup (voice leave, presence) without awaiting it.
