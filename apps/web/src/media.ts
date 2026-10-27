@@ -240,6 +240,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
   const pushHeld = useRef(false);
   const errorRef = useRef(reportError);
   const iceServers = useRef<RTCIceServer[]>([]);
+  const iceRefreshTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const byteSamples = useRef(new Map<string, { bytes: number; timestamp: number }>());
   const sounds = useRef(new Set<AudioBufferSourceNode>());
   const soundMonitors = useRef(new Set<GainNode>());
@@ -1085,6 +1086,8 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     setModeration(moderationRef.current);
     clearTimeout(reconnectTimer.current);
     reconnectTimer.current = undefined;
+    clearInterval(iceRefreshTimer.current);
+    iceRefreshTimer.current = undefined;
     reconnectAttempts.current = 0;
     generation.current++;
     inputGeneration.current++;
@@ -1137,6 +1140,19 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
       const configuration = await api<{ iceServers: RTCIceServer[] }>('/rtc');
       if (operation !== generation.current) return;
       iceServers.current = configuration.iceServers ?? [];
+      // Temporary TURN credentials expire. Someone who stays in voice keeps handing fresh ones
+      // to new peers and to existing connections' ICE restarts; a failed refresh keeps the current set.
+      clearInterval(iceRefreshTimer.current);
+      iceRefreshTimer.current = setInterval(async () => {
+        try {
+          const refreshed = (await api<{ iceServers: RTCIceServer[] }>('/rtc')).iceServers;
+          if (operation !== generation.current || !Array.isArray(refreshed)) return;
+          iceServers.current = refreshed;
+          records.current.forEach(({ connection }) => {
+            try { connection.setConfiguration({ ...connection.getConfiguration(), iceServers: refreshed }); } catch {}
+          });
+        } catch {}
+      }, 6 * 60 * 60 * 1000);
       if (!microphone.current?.getAudioTracks().some(track => track.readyState === 'live') && !await acquireMicrophone(operation)) return;
       const activeSocket = voiceSocket.current;
       if (operation !== generation.current) return;

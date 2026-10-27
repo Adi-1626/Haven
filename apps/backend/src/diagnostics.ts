@@ -3,7 +3,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 export type Severity = 'debug' | 'info' | 'warn' | 'error';
 export interface DiagnosticEntry { ts: string; level: Severity; event: string; [field: string]: unknown }
 export type DiagnosticSink = (entry: DiagnosticEntry) => void;
-type Fields = Record<string, string | number | boolean | undefined | Record<string, number | boolean>>;
+export type Fields = Record<string, string | number | boolean | undefined | Record<string, number | boolean>>;
 
 const rank: Record<Severity, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 

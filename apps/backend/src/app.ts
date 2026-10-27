@@ -14,6 +14,7 @@ import { createStorage, type StorageService } from './storage/index.js';
 import { HostedProfileReviewRequiredError, SupabaseAuthVerifier } from './auth/supabase.js';
 import { assertActiveInvite, InviteUnavailableError } from './db/invites.js';
 import { createDiagnostics, type DiagnosticSink, type Severity } from './diagnostics.js';
+import { createTurnCredentials, turnOptionsFromEnv, type TurnOptions } from './turn.js';
 
 type AuthRequest = Request & { userId?: string; profile?: User; viaSupabase?: boolean };
 class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
@@ -69,6 +70,8 @@ export interface AppOptions {
   storage?: StorageService;
   /** Receives structured diagnostics instead of stdout/stderr (tests capture them). */
   diagnosticsSink?: DiagnosticSink;
+  /** Turnix TURN token, region and minting behavior; tests replace the network call and clock. */
+  turn?: TurnOptions;
 }
 
 export function createApp({
@@ -86,6 +89,7 @@ export function createApp({
   heartbeat = { interval: 10_000, timeout: 10_000 },
   storage: optionsStorage,
   diagnosticsSink,
+  turn: turnOptions = turnOptionsFromEnv(process.env),
 }: AppOptions = {}) {
   let configuredPublicUrl: string | undefined;
   if (publicUrl) {
@@ -1393,8 +1397,13 @@ export function createApp({
     response.json({ ok: true });
   }));
 
-  app.get('/api/rtc', api((_request, response) => {
-    let iceServers: unknown = [{ urls: 'stun:stun.l.google.com:19302' }];
+  // Peers behind symmetric NAT or strict firewalls only connect through a TURN relay. Hosted Mode only:
+  // a Local Mode server keeps serving just ICE_SERVERS_JSON even if a Turnix token is in its environment.
+  const turn = createTurnCredentials(isHostedMode ? turnOptions : {}, (severity, event, fields, dedupeKey) => diagnostics.log(severity, event, fields, dedupeKey));
+  if (!isHostedMode && turnOptions.apiToken) diagnostics.log('warn', 'turn.disabled_local_mode');
+
+  app.get('/api/rtc', api(async (request, response) => {
+    let iceServers: unknown[] = [{ urls: 'stun:stun.l.google.com:19302' }];
     if (process.env.ICE_SERVERS_JSON) {
       try {
         iceServers = JSON.parse(process.env.ICE_SERVERS_JSON);
@@ -1403,7 +1412,12 @@ export function createApp({
         throw new ApiError(500, 'Invalid ICE_SERVERS_JSON configuration');
       }
     }
-    response.json({ iceServers });
+    // Order does not affect path choice: ICE ranks host and server-reflexive candidates above relayed ones,
+    // so a direct connection wins whenever one works.
+    const relay = await turn.servers(diagnostics.anonymize('u', request.userId)!);
+    // Per-user credentials: no browser or intermediary may store them or serve them to anyone else.
+    response.setHeader('Cache-Control', 'no-store');
+    response.json({ iceServers: [...relay, ...iceServers] });
   }));
 
   io.use(async (socket, next) => {

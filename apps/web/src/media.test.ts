@@ -88,7 +88,9 @@ class FakeConnection {
   static instances: FakeConnection[] = [];
   senders: FakeSender[] = [];
   closed = false;
-  constructor() { FakeConnection.instances.push(this); }
+  constructor(public configuration: RTCConfiguration = {}) { FakeConnection.instances.push(this); }
+  getConfiguration() { return this.configuration; }
+  setConfiguration(configuration: RTCConfiguration) { this.configuration = configuration; }
   addTrack(track: FakeTrack) { const sender = new FakeSender(track); this.senders.push(sender); return sender; }
   transceivers: any[] = [];
   addTransceiver(kind: string) {
@@ -139,7 +141,7 @@ function environment(saved = new Map<string, string>()) {
       }
     },
   };
-  const rtcResponse = { ok: true, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ iceServers: [] }), arrayBuffer: async () => new ArrayBuffer(8) };
+  const rtcResponse = { ok: true, headers: new Headers({ 'content-type': 'application/json' }), json: async (): Promise<{ iceServers: RTCIceServer[] }> => ({ iceServers: [] }), arrayBuffer: async () => new ArrayBuffer(8) };
   const globals = {
     localStorage: { getItem: (key: string) => saved.get(key) ?? null, setItem: (key: string, value: string) => { saved.set(key, value); } },
     navigator: { mediaDevices }, AudioContext: FakeContext, Audio: FakeAudio, fetch: async (input: RequestInfo | URL) => String(input).endsWith('/api/config') ? Response.json({ mode: 'local' }) : rtcResponse,
@@ -188,6 +190,32 @@ test('unavailable enhanced processing recaptures with native suppression and rel
     setup.media.leave();
     assert.ok(captures[1].stream.tracks[0].stopped);
   } finally { setup.restore(); }
+});
+
+test('a long voice session refreshes expiring TURN credentials on its peer connections', async context => {
+  const setup = environment();
+  context.mock.timers.enable({ apis: ['setInterval'] });
+  try {
+    const first = [{ urls: 'turn:turn.example:3478', username: 'one', credential: 'first' }];
+    const second = [{ urls: 'turn:turn.example:3478', username: 'two', credential: 'second' }];
+    let fetches = 0;
+    setup.rtcResponse.json = async () => { fetches++; return { iceServers: fetches === 1 ? first : second }; };
+    setup.peerList.push({ socketId: 'remote', user: { id: 'remote', name: 'Remote' } });
+    await setup.media.join('refresh-room');
+    const [connection] = FakeConnection.instances;
+    assert.deepEqual(connection.configuration.iceServers, first);
+    context.mock.timers.tick(6 * 60 * 60 * 1000 - 1);
+    assert.equal(fetches, 1);
+    context.mock.timers.tick(1);
+    for (let attempt = 0; attempt < 50 && connection.configuration.iceServers !== second; attempt++) await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(connection.configuration.iceServers, second);
+    assert.equal(fetches, 2);
+    // Leaving stops the refresh.
+    setup.media.leave();
+    context.mock.timers.tick(24 * 60 * 60 * 1000);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(fetches, 2);
+  } finally { setup.restore(); context.mock.timers.reset(); }
 });
 
 test('hosted voice joins send the current access token when loading ICE configuration', async () => {
