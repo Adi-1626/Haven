@@ -7,6 +7,7 @@ import { useDesktopState } from '../desktop-settings';
 import { SettingsSection } from './SettingsSection';
 import { SettingRow } from './SettingRow';
 import { ToggleSwitch } from '../ToggleSwitch';
+import { DesktopUpdateSettings } from '../DesktopUpdates';
 
 type DesktopSnapshot = Awaited<ReturnType<NonNullable<Window['haven']>['getDesktopSettings']>>;
 type DesktopValues = DesktopSnapshot['settings'];
@@ -256,6 +257,8 @@ export function AppGamingSettings({
           </div>
         </SettingsSection>
       )}
+
+      <DesktopUpdateSettings media={media} />
 
       {status && (
         <p role="status" className="settings-success-status">

@@ -163,6 +163,7 @@ function createDesktopRuntime({ app, Tray, Menu, nativeImage, iconPath, globalSh
     snapshot, apply, attachWindow, restore, quit, setRecording,
     releasePtt: () => { send({ action: 'ptt', pressed: false }); helper?.configure(recording ? null : parseShortcut(settings.pttShortcut, { bare: true })); },
     startHidden: () => process.argv.includes('--startup') && settings.startMinimized && (settings.closeToTray || settings.minimizeToTray),
+    voiceState: () => ({ ...voice }),
     setVoiceState: next => { const previous = voice; voice = { ...voice }; for (const key of Object.keys(voice)) if (typeof next?.[key] === 'boolean') voice[key] = next[key]; updateTray(); if (previous.connected !== voice.connected || previous.pushToTalk !== voice.pushToTalk) void syncHelper(); },
     beforeQuit: () => { quitting = true; helperGeneration++; helper?.stop(); helper = undefined; globalShortcut.unregisterAll(); tray?.destroy(); tray = undefined; }
   };

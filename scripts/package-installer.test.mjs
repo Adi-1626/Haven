@@ -6,9 +6,21 @@ import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveInstallerPaths } from './package-installer.mjs';
+import { resolveInstallerPaths, validateUpdateMetadata } from './package-installer.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+test('latest.yml must describe exactly the built installer', () => {
+  const expected = { version: '1.0.1', installer: 'Haven-Setup.exe', bytes: 130, sha512: 'abc==' };
+  const valid = { version: '1.0.1', files: [{ url: 'Haven-Setup.exe', sha512: 'abc==', size: 130 }], path: 'Haven-Setup.exe', sha512: 'abc==', releaseDate: '2026-11-01T00:00:00.000Z' };
+  assert.equal(validateUpdateMetadata(valid, expected), valid);
+  assert.throws(() => validateUpdateMetadata({ ...valid, version: '1.0.0' }, expected), /version 1.0.0 is not 1.0.1/);
+  assert.throws(() => validateUpdateMetadata({ ...valid, sha512: 'other' }, expected), /sha512/);
+  assert.throws(() => validateUpdateMetadata({ ...valid, files: [{ ...valid.files[0], size: 1 }] }, expected), /size/);
+  assert.throws(() => validateUpdateMetadata({ ...valid, files: [{ ...valid.files[0], url: 'Haven-Setup-1.0.1.exe' }] }, expected), /exactly Haven-Setup.exe/);
+  assert.throws(() => validateUpdateMetadata({ ...valid, files: [{ ...valid.files[0], isAdminRightsRequired: true }] }, expected), /administrator/);
+  assert.throws(() => validateUpdateMetadata(undefined, expected), /Invalid latest.yml/);
+});
+
 test('installer rejects escaped output and missing output arguments', () => {
   assert.throws(() => resolveInstallerPaths(root, '0.4.1', ['--output', '../outside']), /inside release/);
   assert.throws(() => resolveInstallerPaths(root, '0.4.1', ['--output']), /Usage/);
