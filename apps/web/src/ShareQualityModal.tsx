@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown, Monitor, MonitorUp, SlidersHorizontal, Square, X } from 'lucide-react';
 import type { useMedia } from './media';
+import { targetDimensions } from './media-quality';
 import StreamStatistics from './StreamStatistics';
 import './zenith-media-modals.css';
 
@@ -40,10 +41,12 @@ export function ShareQualityModal({ media, onClose }: ShareQualityModalProps) {
   };
 
   const isSharing = Boolean(media.sharing);
-  const nativeWidth = media.quality.nativeWidth || 1920;
-  const nativeHeight = media.quality.nativeHeight || 1080;
-  const targetWidth = media.quality.width || (height === 'native' ? nativeWidth : Math.round((nativeWidth / nativeHeight) * (typeof height === 'number' ? height : 1080)));
-  const targetHeight = typeof height === 'number' ? height : nativeHeight;
+  // Measured from the live capture. Before sharing nothing is known: the picker chooses the source.
+  const nativeWidth = media.quality.nativeWidth;
+  const nativeHeight = media.quality.nativeHeight;
+  const measured = nativeWidth > 0 && nativeHeight > 0;
+  const target = measured ? targetDimensions(nativeWidth, nativeHeight, height) : undefined;
+  const targetResolution = target ? `${target.width} × ${target.height}` : height === 'native' ? 'native resolution of the chosen source' : `${height}p, or the source's height if smaller`;
   const targetFps = fps;
   const targetBitrate = bitrate;
 
@@ -83,9 +86,9 @@ export function ShareQualityModal({ media, onClose }: ShareQualityModalProps) {
         <div className="zenith-share-source-left">
           <Monitor size={18} aria-hidden="true" />
           <span>
-            {isSharing
+            {isSharing && measured
               ? `Captured source: ${nativeWidth} × ${nativeHeight}`
-              : `Ready to capture: Native source (${nativeWidth} × ${nativeHeight})`}
+              : 'Ready to capture: native resolution of the screen or window you choose'}
           </span>
         </div>
         {isSharing ? (
@@ -131,27 +134,18 @@ export function ShareQualityModal({ media, onClose }: ShareQualityModalProps) {
               value={height}
               onChange={e => setHeight(e.target.value === 'native' ? 'native' : Number(e.target.value))}
             >
-              {media.shareOptions && media.shareOptions.length > 0 ? (
-                media.shareOptions.map(option => (
-                  <option key={option.height} value={option.height}>
-                    {option.label}
-                  </option>
-                ))
-              ) : (
-                <>
-                  <option value="native">Native ({nativeWidth} × {nativeHeight}) · source dimensions</option>
-                  <option value={1080}>1080p (1920 × 1080)</option>
-                  <option value={720}>720p (1280 × 720)</option>
-                  <option value={480}>480p (854 × 480)</option>
-                </>
-              )}
+              {media.shareOptions.map(option => (
+                <option key={option.height} value={option.height}>
+                  {option.label}
+                </option>
+              ))}
             </select>
             <div className="zenith-select-chevron" aria-hidden="true">
               <ChevronDown size={16} />
             </div>
           </div>
           <p className="zenith-control-help">
-            Current output target: {targetWidth} × {targetHeight}, {targetFps} fps, up to {targetBitrate} Mbps per viewer.
+            Current output target: {targetResolution}, {targetFps} fps, up to {targetBitrate} Mbps per viewer. Viewers connected through a relay server receive at most 720p, 15 fps and 1 Mbps.
           </p>
         </div>
 

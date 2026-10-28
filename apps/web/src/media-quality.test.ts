@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { bitrateBits, captureDimensions, qualityForSource, senderScale, shareOptionsFor, targetDimensions } from './media-quality';
+import { bitrateBits, captureDimensions, qualityForSource, senderScale, shareOptionsBeforeCapture, shareOptionsFor, targetDimensions } from './media-quality';
 
 test('quality options never advertise a resolution above the captured source', () => {
   for (const source of [[1280, 720], [1920, 1080], [3440, 1440], [1024, 768], [800, 1600], [319, 199]]) {
@@ -45,4 +45,17 @@ test('changing sources rebuilds native targets without upscaling a smaller captu
       if (requestedHeight === 'native') assert.deepEqual({ width: next.width, height: next.height }, { width, height });
     }
   }
+});
+
+test('Native names the measured source size; before capture no size is claimed', () => {
+  for (const [width, height] of [[1920, 1080], [2560, 1440], [3840, 2160], [1920, 1032], [1080, 1920]]) {
+    assert.equal(shareOptionsFor(width, height)[0].label, `Native (${width} × ${height})`);
+  }
+  // Manual heights stay available below the source; nothing above it is offered.
+  assert.deepEqual(shareOptionsFor(2560, 1440).map(option => option.label), ['Native (2560 × 1440)', '1080p', '720p', '480p']);
+  assert.deepEqual(shareOptionsFor(3840, 2160).map(option => option.height), ['native', 1440, 1080, 720, 480]);
+  const before = shareOptionsBeforeCapture();
+  assert.equal(before[0].height, 'native');
+  assert.doesNotMatch(before[0].label, /\d/);
+  assert.deepEqual(before.slice(1).map(option => option.label), ['2160p', '1440p', '1080p', '720p', '480p']);
 });

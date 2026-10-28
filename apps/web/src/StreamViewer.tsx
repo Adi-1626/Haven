@@ -180,7 +180,7 @@ export default function StreamViewer({
     reactionTimers.current.add(timer);
   };
 
-  const qualityLabel = size.height >= 1440 ? '1440p' : size.height >= 1080 ? '1080p' : size.height >= 720 ? '720p' : size.height > 0 ? `${size.height}p` : 'HD';
+  const qualityLabel = size.height >= 2160 ? '2160p' : size.height >= 1440 ? '1440p' : size.height >= 1080 ? '1080p' : size.height >= 720 ? '720p' : size.height > 0 ? `${size.height}p` : 'HD';
 
   return createPortal(
     <div

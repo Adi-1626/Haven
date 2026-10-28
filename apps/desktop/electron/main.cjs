@@ -2,6 +2,7 @@ const { app, BrowserWindow, desktopCapturer, ipcMain, shell, Tray, Menu, nativeI
 const { createDesktopRuntime } = require('./desktop-runtime.cjs');
 const { createClientSettings } = require('./client-settings.cjs');
 const { permissionAllowed } = require('./permissions.cjs');
+const { describeSources } = require('./capture-sources.cjs');
 const { liveWindowContents, trustedClientEvent } = require('./client-access.cjs');
 const { createAuthVault } = require('./auth-vault.cjs');
 const { validateReleaseConfig, selectConnection } = require('./release-config.cjs');
@@ -178,7 +179,7 @@ async function start() {
   backendOrigin ||= origin;
   ipcMain.handle('capture:sources', event => {
     if (event.sender !== liveWindowContents(picker)) return [];
-    return [...permittedSources.values()].map(source => ({ id: source.id, name: source.name, thumbnail: source.thumbnail.toDataURL(), display: source.id.startsWith('screen:') }));
+    return describeSources([...permittedSources.values()], require('electron').screen.getAllDisplays());
   });
   ipcMain.on('capture:select', (event, selection) => { if (event.sender === liveWindowContents(picker)) captureComplete(permittedSources.get(selection?.id), selection?.audio === true); });
   ipcMain.handle('server:connect', async (event, address) => {

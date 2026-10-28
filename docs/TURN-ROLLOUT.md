@@ -68,7 +68,10 @@ Free plan: 10 GB/month, overages unavailable; what happens at the limit is undoc
 users fall back to STUN). Only relayed connections count:
 
 - voice, 24–64 kbps: about 35–70 MB per relayed peer pair per hour;
-- screen sharing, 8 Mbps default: about 3.6 GB per hour; one relayed share can exhaust the month in under 3 hours.
+- screen sharing to a relayed viewer: capped at 1 Mbps, 15 fps, 720p for that viewer only (selected ICE pair
+  is relayed, per `getStats()`), so at most about 0.45 GB per relayed viewer per hour. Direct viewers keep the
+  full setting (8 Mbps default). Measured with high-motion synthetic content: direct 2.46 Mbps at 1440p,
+  relayed 0.88 Mbps at 720p. `e2e/turn-mixed.spec.ts` covers mixed direct/relayed meshes and viewers.
 
 Check usage with `node scripts/turnix-account-check.mjs` (no relay traffic).
 

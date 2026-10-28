@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import { api, fetchResource } from './api';
-import { bitrateBits, captureDimensions, qualityForSource, senderScale, shareOptionsFor } from './media-quality';
+import { bitrateBits, captureDimensions, qualityForSource, senderScale, shareOptionsBeforeCapture, shareOptionsFor } from './media-quality';
 import type { ShareFps, ShareHeight } from './media-quality';
 import { createMicrophonePipeline, normalizeAudioSettings, microphoneCaptureConstraints, type SuppressionStatus } from './audio-pipeline';
 import { audioBitrate, isCaptureCancellation, matchesShortcut, missingAudioDevice, releasesShortcut, voiceDescription } from './audio-policy';
 import { adaptCongestion, defaultRuntimePreferences, effectiveSharePreferences, initialCongestion, normalizeRuntimePreferences, statisticsInterval, type RuntimePreferences, type CongestionState } from './runtime-policy';
 import { subscribeConnectionReports } from './connection-stats';
+import { selectedPairRelayed } from './relay-path';
 import { useAppActivity } from './app-activity';
 import { readMediaPreference, saveMediaPreference } from './media-persistence';
 import { normalizeLocalShortcut, shortcutTypesText } from './shortcuts';
@@ -108,6 +109,8 @@ interface PeerConnection {
   resettable: boolean;
   congested: boolean;
   congestion?: CongestionState;
+  /** The selected ICE pair runs through TURN (from getStats); undefined until a report says. */
+  relayed?: boolean;
 }
 interface PeerPresence { resumed?: boolean; entrySound?: boolean; signaling?: number }
 interface Signal {
@@ -551,7 +554,9 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     if (sender.track?.kind !== 'video' || !screen.current) return;
     const config = qualityRef.current;
     const record = Array.from(records.current.values()).find(record => record.screenSenders.includes(sender));
-    const limited = record?.congestion?.videoLimited;
+    // A relayed viewer costs TURN quota: it gets the same cap as a congested one. Direct viewers and
+    // the captured source are untouched; voice never goes through this path.
+    const limited = record?.congestion?.videoLimited || record?.relayed === true;
     const captured = screenDimensions(sender.track);
     const parameters = sender.getParameters();
     parameters.encodings = parameters.encodings.length ? parameters.encodings : [{}];
@@ -706,6 +711,9 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     const record = records.current.get(socketId);
     if (!record?.screenTransport || !screen.current || !streamSubscribers.current.has(socketId)) return;
     void record.screenTransport.setStream(screen.current).then(async () => {
+      if (records.current.get(socketId) !== record) return;
+      // Know the path before the first frame, rather than waiting for the next statistics sample.
+      if (record.relayed === undefined) record.relayed = selectedPairRelayed(await record.connection.getStats().catch(() => undefined));
       if (records.current.get(socketId) !== record) return;
       await configureScreenSender(record.screenTransport!.video.sender);
       const sender = record.screenTransport!.audio.sender;
@@ -1247,7 +1255,10 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     const operation = ++screenGeneration.current;
     try {
       const { fps } = effectiveSharePreferences(settingsRef.current, settingsRef.current.gamingMode);
-      const captured = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: fps, max: fps } }, audio: true });
+      // resizeMode 'none' from the first frame: the browser's default may scale a large screen down before
+      // applyShareQuality runs. Native size is then whatever the chosen screen or window really delivers.
+      const video: MediaTrackConstraints & { resizeMode: string } = { frameRate: { ideal: fps, max: fps }, resizeMode: 'none' };
+      const captured = await navigator.mediaDevices.getDisplayMedia({ video, audio: true });
       if (operation !== screenGeneration.current || !room.current) { captured.getTracks().forEach(track => track.stop()); return; }
       const track = captured.getVideoTracks()[0];
       if (!track) { captured.getTracks().forEach(item => item.stop()); throw new Error('No screen video was selected'); }
@@ -1737,7 +1748,11 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
           const previous = record.congestion ?? initialCongestion;
           const next = adaptCongestion(previous, loss, rtt);
           record.congestion = next;
-          if (next.videoLimited !== previous.videoLimited) {
+          // Missing pair data keeps the last decision; a direct/relay switch re-caps without renegotiating.
+          const relayed = selectedPairRelayed(reports) ?? record.relayed;
+          const pathChanged = relayed !== record.relayed;
+          record.relayed = relayed;
+          if (next.videoLimited !== previous.videoLimited || pathChanged) {
             await Promise.all(record.screenSenders.map(sender => configureScreenSender(sender).catch(() => {})));
           }
           // Foreground/mode changes may replace this observer while the encoder
@@ -1774,7 +1789,7 @@ export function useMedia(socket: Socket | null, currentUserId: string, reportErr
     streamError: (id: string) => streamErrors.current.get(id),
     setStreamVolume,
     addStreamSubscriber, removeStreamSubscriber,
-    shareOptions: quality.nativeWidth ? shareOptionsFor(quality.nativeWidth, quality.nativeHeight) : [],
+    shareOptions: quality.nativeWidth ? shareOptionsFor(quality.nativeWidth, quality.nativeHeight) : shareOptionsBeforeCapture(),
     setShareQuality, quality, settings, persistenceError, setSettings, devices, enumerateDevices, refreshDevices, deviceError, setPeerVolume, setUserVolume, setUserLocallyMuted, playSound,
     micTest, startMicTest, stopMicTest, microphoneProcessing, testProcessing, connectionStatsSources, setVideoDetailsOpen, background,
     inputMeter, startInputMonitor, stopInputMonitor, testOutputSound,

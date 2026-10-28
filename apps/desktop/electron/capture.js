@@ -11,7 +11,9 @@ function render() {
     image.alt = '';
     const label = document.createElement('span');
     label.textContent = source.name;
-    button.append(image, label);
+    const detail = document.createElement('small');
+    detail.textContent = source.width && source.height ? `Native ${source.width} × ${source.height}` : source.display ? 'Display' : 'Window · native size of the window';
+    button.append(image, label, detail);
     button.addEventListener('click', () => window.capture.select(source.id, document.getElementById('system-audio').checked));
     container.append(button);
   }
