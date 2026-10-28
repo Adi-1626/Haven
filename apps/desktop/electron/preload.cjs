@@ -17,5 +17,9 @@ contextBridge.exposeInMainWorld('haven', {
   storeAuthSession: sessionJson => ipcRenderer.invoke('desktop:auth:store-session', sessionJson),
   getAuthSession: () => ipcRenderer.invoke('desktop:auth:get-session'),
   clearAuthSession: () => ipcRenderer.invoke('desktop:auth:clear-session'),
-  writeClipboard: text => ipcRenderer.invoke('desktop:clipboard:write', text)
+  writeClipboard: text => ipcRenderer.invoke('desktop:clipboard:write', text),
+  getUpdateState: () => ipcRenderer.invoke('updates:state'),
+  checkForUpdates: () => ipcRenderer.invoke('updates:check'),
+  installUpdate: options => ipcRenderer.invoke('updates:install', { confirmedDisconnect: options?.confirmedDisconnect === true, active: options?.active === true }),
+  onUpdateState: callback => { const listener = (_event, state) => callback(state); ipcRenderer.on('updates:state', listener); return () => ipcRenderer.removeListener('updates:state', listener); }
 });

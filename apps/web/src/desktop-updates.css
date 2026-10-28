@@ -1,0 +1,157 @@
+/* Zenith Minimal — desktop update indicator, dialog and settings row */
+
+.desktop-update-button {
+  position: relative;
+}
+
+.desktop-update-button.is-progress,
+.desktop-update-button.is-ready {
+  color: var(--zenith-accent);
+}
+
+.desktop-update-button.is-attention {
+  color: var(--zenith-text-secondary, var(--zenith-text-muted));
+}
+
+.desktop-update-ring {
+  position: absolute;
+  inset: 2px;
+  width: 28px;
+  height: 28px;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.desktop-update-ring circle {
+  fill: none;
+  stroke-width: 2;
+}
+
+.desktop-update-ring-track {
+  stroke: var(--zenith-line);
+}
+
+.desktop-update-ring-value {
+  stroke: var(--zenith-accent);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.25s ease;
+}
+
+.desktop-update-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--zenith-emerald);
+  box-shadow: 0 0 0 2px var(--zenith-content, #13151c);
+}
+
+.desktop-update-button.is-attention .desktop-update-dot {
+  background: var(--zenith-amber);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-update-ring-value {
+    transition: none;
+  }
+}
+
+dialog.modal.zenith-dialog-modal.desktop-update-dialog {
+  width: 480px !important;
+  max-width: min(480px, calc(100vw - 32px)) !important;
+}
+
+.desktop-update-dialog .zenith-dialog-inner {
+  max-height: min(600px, calc(100vh - 32px));
+}
+
+.desktop-update-dialog .zenith-dialog-body {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.desktop-update-versions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.desktop-update-versions div {
+  padding: 10px 12px;
+  border: 1px solid var(--zenith-line);
+  border-radius: var(--radius-md, 8px);
+}
+
+.desktop-update-versions dt {
+  font-size: 11px;
+  color: var(--zenith-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.desktop-update-versions dd {
+  margin: 4px 0 0;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 14px;
+  color: var(--zenith-text-primary);
+}
+
+.desktop-update-progress {
+  height: 6px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--zenith-line);
+}
+
+.desktop-update-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--zenith-accent);
+  transition: width 0.25s ease;
+}
+
+.desktop-update-detail {
+  margin-top: 6px !important;
+  font-size: 12px;
+  color: var(--zenith-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.desktop-update-notes {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--zenith-line);
+}
+
+.desktop-update-notes h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--zenith-text-primary);
+}
+
+.desktop-update-notes div {
+  max-height: 180px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 12.5px;
+  color: var(--zenith-text-secondary, #c7c5d0);
+}
+
+.desktop-update-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 560px) {
+  .desktop-update-versions {
+    grid-template-columns: 1fr;
+  }
+}
