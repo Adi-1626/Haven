@@ -140,3 +140,22 @@ npm run verify:installer
 ```
 
 This produces `release/Haven-1.0.0-win32-x64` and `release/Haven-1.0.0-installer/Haven-Setup.exe`.
+
+## Version 1.0.1 — 28 October 2026
+
+All workspace manifests and the lockfile are **1.0.1** (commit `923a2a7`, tag `v1.0.1`). Version sources
+are unchanged: Electron, the NSIS installer and `Haven.exe` file/product version (`1.0.1`) take it from the
+root `package.json`; the backend reports its own manifest's version on its health endpoints.
+
+1.0.1 is the first release with automatic updates. From now on every release publishes three assets
+from `release/Haven-<version>-installer/` together, under a tag that contains the version:
+
+| Asset | Bytes | SHA-256 |
+|---|---|---|
+| `Haven-Setup.exe` | 145,036,025 | `731e0bf15e07a4b245411d4b4b43f0534c531a7ca51c70fe594ad5ad5b50179d` |
+| `Haven-Setup.exe.blockmap` | 152,163 | `133d17ad23f1216d2882cc761611814c97f2f39da4e799048559e5f231e321ab` |
+| `latest.yml` | 327 | `47712d122a1cb39d4fbcba4cbe901e106cfe1fbbc0e008232eb8c3f0ba0febaa` |
+
+The installer is unsigned. 1.0.0 contains no updater, so its users install 1.0.1 once by hand. The v1.0.0
+GitHub Release was replaced by the v1.0.1 release; the `v1.0.0` tag remains, and the original 1.0.0
+installer had SHA-256 `76bb06a6cf3a8fd005bc125a7cebfa87a32ddec956961272b6a72f0eab63dd52`.

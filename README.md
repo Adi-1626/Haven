@@ -1,10 +1,10 @@
-# Haven 1.0.0
+# Haven 1.0.1
 
 An independent desktop community application inspired by Discord's interaction model. Electron, React, TypeScript, Socket.IO and WebRTC, with separate Hosted (Supabase Auth/PostgreSQL) and Local (SQLite) modes. No Discord code, assets, services or accounts are used.
 
 Public installer candidates default to Hosted Mode: the application at `https://haven-ea6.pages.dev` uses `https://haven-backend.getvoroa.com`. `apps/landing` is the separate marketing website and is excluded from the desktop payload. Source development commands below retain Local Mode. A packaged app can explicitly launch Local Mode with `Haven.exe --local-mode`, using the separate `%APPDATA%/Haven Local` profile. Local accounts and data are never migrated to Hosted.
 
-Version **1.0.0** is the intended first public release; it is not published yet. The Windows installer must be built from this revision and pass installation verification before publication. Earlier 0.4.1 installer candidates must not be released. The Hosted database migrations and backend are deployed (24 October 2026). The Cloudflare frontend must be redeployed from this revision; building Electron does not deploy that web application. See [packaging status](docs/PACKAGING.md) and the [Hosted rollout](docs/HOSTED-AUTH-ROLLOUT.md).
+Version **1.0.1** is the current release, published on [GitHub Releases](https://github.com/Adi-1626/Haven/releases/tag/v1.0.1) on 28 October 2026. It adds automatic desktop updates and relay-aware screen sharing. Haven 1.0.0 cannot update itself: its users install 1.0.1 once with `Haven-Setup.exe`, and later versions then update automatically. Earlier 0.4.1 installer candidates must not be released. The Hosted web application (Cloudflare Pages) and backend (Voroa) are deployed separately; building Electron deploys neither. See [packaging status](docs/PACKAGING.md), the [TURN rollout](docs/TURN-ROLLOUT.md) and the [Hosted rollout](docs/HOSTED-AUTH-ROLLOUT.md).
 
 Version 0.4 adds live profile-picture updates during voice, original-picture viewing, recorded keyboard shortcuts, permission-checked custom server emoji (including animation), expanded server settings and right-click menus with local volume/mute and community moderation. See the [community experience guide](docs/COMMUNITY-EXPERIENCE.md) for controls, limits and validation.
 
@@ -22,7 +22,7 @@ npm run build
 npm run desktop
 ```
 
-Or double-click `Start-Haven.cmd` after installing Node. `npm run package:win:portable` builds the portable copy at `release/Haven-1.0.0-win32-x64/Haven.exe`; keep its entire folder together. This is an unsigned portable application, not an installed, signed release. The older builds, including `release/Haven-0.4.1-win32-x64`, are retained separately. Fully quit the old version, including its tray if enabled, before launching the updated executable; the existing Haven data/profile is preserved.
+Or double-click `Start-Haven.cmd` after installing Node. `npm run package:win:portable` builds the portable copy at `release/Haven-1.0.1-win32-x64/Haven.exe`; keep its entire folder together. This is an unsigned portable application, not an installed, signed release. The older builds, including `release/Haven-0.4.1-win32-x64`, are retained separately. Fully quit the old version, including its tray if enabled, before launching the updated executable; the existing Haven data/profile is preserved.
 
 Version 0.3.1 fixes login form validation for supported dotted/hyphenated usernames and copied `@username` values. Accounts are local to their Haven backend: a separately started browser server at `localhost:3001` does not contain your Desktop accounts. To use a Desktop account in a browser, open Desktop → **Test with another account → Copy backend URL**, then use that exact address. Do not copy account databases between running backends or recreate the account to work around a wrong address.
 
