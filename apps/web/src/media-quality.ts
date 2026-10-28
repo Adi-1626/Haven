@@ -25,13 +25,27 @@ export function qualityForSource(width: number, height: number, requestedHeight:
   return { nativeWidth: native.width, nativeHeight: native.height, ...targetDimensions(native.width, native.height, requestedHeight) };
 }
 
+const standardHeights = [2160, 1440, 1080, 720, 480];
+
+/** Options for a measured capture: Native is the source's real size; only smaller standard heights follow. */
 export function shareOptionsFor(width: number, height: number): ShareOption[] {
   const native = captureDimensions(width, height);
   return [
-    { label: `Native · ${native.width} × ${native.height}`, height: 'native', width: native.width },
-    ...[2160, 1440, 1080, 720, 480].filter(value => value < native.height).map(value => ({
+    { label: `Native (${native.width} × ${native.height})`, height: 'native', width: native.width },
+    ...standardHeights.filter(value => value < native.height).map(value => ({
       label: `${value}p`, height: value, width: targetDimensions(native.width, native.height, value).width,
     })),
+  ];
+}
+
+/**
+ * Options before anything is captured. The source (which monitor or window) is chosen only in the
+ * picker, so no size is claimed; a height above the source's is later capped to Native.
+ */
+export function shareOptionsBeforeCapture(): ShareOption[] {
+  return [
+    { label: 'Native (resolution of the screen or window you choose)', height: 'native', width: 0 },
+    ...standardHeights.map(value => ({ label: `${value}p`, height: value, width: 0 })),
   ];
 }
 

@@ -39,6 +39,7 @@ function plainReleaseNotes(notes) {
       if (name[0] === '#') { const code = name[1].toLowerCase() === 'x' ? parseInt(name.slice(2), 16) : Number(name.slice(1)); return code > 0 && code < 0x110000 ? String.fromCodePoint(code) : ''; }
       return entities[name.toLowerCase()] ?? entity;
     })
+    .replace(/[<>]/g, '')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

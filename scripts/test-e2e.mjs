@@ -11,6 +11,8 @@ for (const suite of suites) {
   process.stdout.write(`\nHaven isolated E2E: ${label}\n`);
   const configuration = suite.some(argument => argument.endsWith('voice-signaling.spec.ts'))
     ? ['--config', 'e2e/voice-signaling.config.ts']
+    : suite.some(argument => argument.endsWith('turn-mixed.spec.ts'))
+    ? ['--config', 'e2e/turn-mixed.config.ts']
     : suite.some(argument => argument.endsWith('voice-sounds.spec.ts'))
     ? ['--config', 'e2e/voice-sounds.config.ts']
     : suite.some(argument => argument.endsWith('stream-subscriptions.spec.ts'))

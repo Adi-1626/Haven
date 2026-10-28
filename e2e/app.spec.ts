@@ -115,7 +115,7 @@ test('actual WebRTC audio and encoded screen video between independent clients',
   await page.getByRole('button', { name: 'Stream quality', exact: true }).click();
   await expect(page.getByText('Captured source: 1280 × 720', { exact: true })).toBeVisible();
   const resolution = page.getByLabel('Resolution', { exact: true });
-  await expect(resolution.locator('option')).toHaveText(['Native · 1280 × 720', '480p']);
+  await expect(resolution.locator('option')).toHaveText(['Native (1280 × 720)', '480p']);
   await resolution.selectOption('480');
   await page.getByLabel('Frame Rate', { exact: true }).selectOption('30');
   await page.getByRole('button', { name: 'Apply quality', exact: true }).click();

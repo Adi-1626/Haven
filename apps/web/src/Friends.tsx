@@ -836,7 +836,7 @@ export function FriendsPage({
                           {display(item.user)}'s Screen
                         </div>
                         <div className="friends-active-preview-meta">
-                          1080p 60fps · In voice
+                          Sharing screen · In voice
                         </div>
                       </div>
                     )}
