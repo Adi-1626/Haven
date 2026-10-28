@@ -1,6 +1,6 @@
 {
   "name": "haven-monorepo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "description": "An independent community chat and screen sharing application",
