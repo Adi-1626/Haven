@@ -17,6 +17,7 @@ const output = resolveOutput(root, packageVersion, process.argv.slice(2));
 const appDirectory = path.join(output, 'resources', 'app');
 const require = createRequire(import.meta.url);
 const { productionConfig } = require('../apps/desktop/electron/release-config.cjs');
+const { appUpdateYml } = require('../apps/desktop/electron/update-config.cjs');
 
 function contained(parent, candidate) {
   const relative = path.relative(parent, candidate);
@@ -127,8 +128,9 @@ async function main() {
   await requireFile(iconPath);
   const sqliteProbe = spawnSync(process.execPath, ['--input-type=commonjs', '-e', "const Database = require('better-sqlite3'); const database = new Database(':memory:'); database.prepare('select 1').get(); database.close();"], { cwd: root, encoding: 'utf8', windowsHide: true });
   if (sqliteProbe.error || sqliteProbe.status !== 0) throw new Error(`better-sqlite3 does not load with the bundled Node runtime: ${sqliteProbe.error?.message || sqliteProbe.stderr}`);
-  // Only the backend's runtime closure ships: Electron main uses Node built-ins, and the web client is already bundled into dist/.
-  const dependencyProbe = spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'npm ls --omit=dev --all --parseable --workspace=@haven/backend'], { cwd: root, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, windowsHide: true });
+  // Only the backend's and the desktop shell's runtime closures ship (the desktop needs electron-updater);
+  // the web client is already bundled into dist/.
+  const dependencyProbe = spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'npm ls --omit=dev --all --parseable --workspace=@haven/backend --workspace=@haven/desktop'], { cwd: root, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, windowsHide: true });
   if (dependencyProbe.error || dependencyProbe.status !== 0) throw new Error(`Production dependency inventory failed: ${dependencyProbe.error?.message || dependencyProbe.stderr}`);
   const dependencies = [...new Set(dependencyProbe.stdout.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(directory => path.resolve(directory)).filter(directory => directory !== root))];
   const packages = await dependencyPlan(root, manifest, dependencies);
@@ -150,6 +152,8 @@ async function main() {
   await writeFile(path.join(appDirectory, 'package.json'), `${JSON.stringify({ name: manifest.name, version: manifest.version, private: true, type: manifest.type, main: 'electron/main.cjs', dependencies: manifest.dependencies }, null, 2)}\n`);
   await cp(electronDir, path.join(appDirectory, 'electron'), { recursive: true, force: false, errorOnExist: true });
   await writeFile(path.join(appDirectory, 'release-config.json'), `${JSON.stringify(productionConfig, null, 2)}\n`);
+  // electron-builder writes this only when it packs the app itself; a prepackaged bundle must carry its own.
+  await writeFile(path.join(output, 'resources', 'app-update.yml'), appUpdateYml());
   const withoutSourceMaps = source => !source.endsWith('.map');
   await cp(backendDir, path.join(appDirectory, 'build'), { recursive: true, force: false, errorOnExist: true, filter: withoutSourceMaps });
   await cp(webDir, path.join(appDirectory, 'dist'), { recursive: true, force: false, errorOnExist: true, filter: withoutSourceMaps });
@@ -183,6 +187,7 @@ async function main() {
   await requireFile(path.join(output, 'Haven.exe'));
   await requireFile(path.join(appDirectory, 'electron', 'main.cjs'));
   await requireFile(path.join(appDirectory, 'node_modules', 'express', 'package.json'));
+  await requireFile(path.join(appDirectory, 'node_modules', 'electron-updater', 'package.json'));
   const metadata = { name: manifest.name, version: manifest.version, electron: electronVersion, platform: process.platform, architecture: process.arch, node: process.version, nodeAbi: process.versions.modules, nodeSha256: createHash('sha256').update(await readFile(path.join(runtimeDirectory, 'node.exe'))).digest('hex'), nodeLicenseSource: license.source, productionPackageCount: packages.length, nativeProbe: JSON.parse(copiedProbe.stdout.trim()), builtAt: new Date().toISOString(), unsigned: true };
   await writeFile(path.join(output, 'PACKAGE-INFO.json'), `${JSON.stringify(metadata, null, 2)}\n`);
   await rename(path.join(output, 'PACKAGING-INCOMPLETE.txt'), path.join(output, 'PACKAGING-COMPLETE.txt'));

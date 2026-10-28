@@ -28,7 +28,7 @@ test('desktop IPC ignores queued requests after the main window is destroyed', a
     async loadURL() {}
   }
   const application = new EventEmitter();
-  Object.assign(application, { setName: () => {}, getPath: () => __dirname, whenReady: () => Promise.resolve(), quit: () => {} });
+  Object.assign(application, { setName: () => {}, getPath: () => __dirname, getVersion: () => '1.0.0', isPackaged: false, whenReady: () => Promise.resolve(), quit: () => {} });
   const electron = { app: application, BrowserWindow: FakeWindow, Menu: { setApplicationMenu: menu => menus.push(menu) }, ipcMain: { on: (name, listener) => listeners.set(name, listener), handle: (name, handler) => handlers.set(name, handler) }, powerMonitor: new EventEmitter() };
   const directory = electronDir;
   const sandbox = {
@@ -58,6 +58,12 @@ test('desktop IPC ignores queued requests after the main window is destroyed', a
     assert.equal(denied.returnValue.value, null);
   }
   assert.equal(written.length, 1);
+  // Source runs never self-update, and only the main window may inspect or install updates.
+  assert.equal(handlers.get('updates:state')(event).status, 'unsupported');
+  assert.deepEqual({ ...await handlers.get('updates:install')(event, { confirmedDisconnect: true }) },{ ok: false, code: 'FAILED', message: 'The update has not finished downloading yet' });
+  for (const handler of ['updates:state', 'updates:check', 'updates:install']) {
+    assert.throws(() => handlers.get(handler)({ sender: independent.contents, senderFrame: independent.contents.mainFrame }), /main Haven window/);
+  }
   main.destroyed = true;
   assert.throws(() => main.webContents, /Object has been destroyed/);
   for (const sender of [main.contents, independent.contents]) {

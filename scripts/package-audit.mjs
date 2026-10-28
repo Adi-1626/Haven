@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const { validateReleaseConfig } = createRequire(import.meta.url)('../apps/desktop/electron/release-config.cjs');
+const { appUpdateYml } = createRequire(import.meta.url)('../apps/desktop/electron/update-config.cjs');
 
 export function validateElectronRuntime(expected, installed, binary) {
   if (!/^\d+\.\d+\.\d+$/.test(expected || '') || installed !== expected || binary?.trim().replace(/^v/, '') !== expected) {
@@ -20,6 +21,10 @@ export const requiredFiles = [
   'resources/app/package.json',
   'resources/app/electron/main.cjs',
   'resources/app/electron/release-config.cjs',
+  'resources/app/electron/updater.cjs',
+  'resources/app/electron/update-config.cjs',
+  'resources/app-update.yml',
+  'resources/app/node_modules/electron-updater/package.json',
   'resources/app/release-config.json',
   'resources/app/electron/preload.cjs',
   'resources/app/electron/capture-preload.cjs',
@@ -57,6 +62,7 @@ export async function auditBundle(bundle) {
   const notes = [];
   try { validateReleaseConfig(JSON.parse(await readFile(path.join(bundle, 'resources/app/release-config.json'), 'utf8'))); }
   catch { problems.push('missing or invalid Hosted production release configuration'); }
+  if (await readFile(path.join(bundle, 'resources/app-update.yml'), 'utf8').catch(() => null) !== appUpdateYml()) problems.push('missing or unofficial update feed in resources/app-update.yml');
   for (const required of requiredFiles) if (!existsSync(path.join(bundle, required))) problems.push(`missing required runtime file: ${required}`);
   let upstreamDebugFiles = 0;
   for (const { relative, bytes } of files) {

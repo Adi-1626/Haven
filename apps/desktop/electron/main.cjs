@@ -1,4 +1,4 @@
-const { app, BrowserWindow, desktopCapturer, ipcMain, shell, Tray, Menu, nativeImage, globalShortcut, powerMonitor, safeStorage, clipboard } = require('electron');
+const { app, BrowserWindow, desktopCapturer, ipcMain, shell, Tray, Menu, nativeImage, globalShortcut, powerMonitor, safeStorage, clipboard, net: electronNet } = require('electron');
 const { createDesktopRuntime } = require('./desktop-runtime.cjs');
 const { createClientSettings } = require('./client-settings.cjs');
 const { permissionAllowed } = require('./permissions.cjs');
@@ -6,6 +6,9 @@ const { describeSources } = require('./capture-sources.cjs');
 const { liveWindowContents, trustedClientEvent } = require('./client-access.cjs');
 const { createAuthVault } = require('./auth-vault.cjs');
 const { validateReleaseConfig, selectConnection } = require('./release-config.cjs');
+const { createUpdater, updateSupport, relaunchFile, relaunchArgs, relaunchStore, takeRelaunchArgs } = require('./updater.cjs');
+const { createUpdateCoordinator } = require('./update-coordination.cjs');
+const { updateFeed } = require('./update-config.cjs');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -24,7 +27,11 @@ const clients = new Set();
 let captureOwner;
 let desktop;
 let clientSettings;
+let updates;
 app.setName('Haven');
+// The update installer relaunches through the Start Menu shortcut with only --updated; restore Local Mode or a profile.
+const updateRelaunchFile = relaunchFile(process.env);
+process.argv.push(...takeRelaunchArgs(process.argv, updateRelaunchFile));
 const profileArg = process.argv.find(argument => argument.startsWith('--profile='))?.slice(10);
 const profileDir = process.env.HAVEN_PROFILE_DIR || profileArg;
 if (profileDir) app.setPath('userData', path.resolve(profileDir));
@@ -264,12 +271,31 @@ async function start() {
     clipboard.writeText(text);
     return true;
   });
+  const support = updateSupport({ app });
+  updates = createUpdater({
+    app, net: electronNet, support,
+    // Shared with every other installed Haven window of this user, like electron-updater's cache it lives in.
+    coordinator: createUpdateCoordinator({ dir: path.join(process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local'), support.cacheDirName || updateFeed.updaterCacheDirName), version: app.getVersion() }),
+    getVoiceState: () => desktop.voiceState(),
+    onState: state => liveWindowContents(window)?.send('updates:state', state),
+    relaunch: relaunchStore(updateRelaunchFile, () => relaunchArgs({ argv: process.argv, env: process.env, userData: app.getPath('userData') })),
+  });
+  const assertUpdateClient = event => { if (!trustedClientEvent(event, trusted, window, true)) throw new Error('Manage updates in the main Haven window'); };
+  ipcMain.handle('updates:state', event => { assertUpdateClient(event); return updates.snapshot(); });
+  ipcMain.handle('updates:check', event => { assertUpdateClient(event); return updates.check({ manual: true }); });
+  ipcMain.handle('updates:install', (event, options) => {
+    assertUpdateClient(event);
+    // Returned rather than thrown: IPC errors lose their code, and the renderer must recognise an active call.
+    return updates.install({ confirmedDisconnect: options?.confirmedDisconnect === true, active: options?.active === true })
+      .then(state => ({ ok: true, state }), error => ({ ok: false, code: error.code || 'FAILED', message: error.message }));
+  });
   window = createClient();
   window.on('closed', () => { captureComplete(null); for (const contents of clients) if (!contents.isDestroyed()) BrowserWindow.fromWebContents(contents)?.close(); });
   await window.loadURL(target || origin);
+  updates.start();
 }
 
 app.whenReady().then(start).catch(error => { require('electron').dialog.showErrorBox('Haven could not start', error.message); app.quit(); });
-app.on('before-quit', () => { desktop?.beforeQuit(); clientSettings?.flush(); captureComplete(null); backend?.kill(); });
+app.on('before-quit', () => { updates?.dispose(); desktop?.beforeQuit(); clientSettings?.flush(); captureComplete(null); backend?.kill(); });
 app.on('activate', () => desktop?.restore());
 app.on('window-all-closed', () => app.quit());

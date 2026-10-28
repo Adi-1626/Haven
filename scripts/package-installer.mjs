@@ -13,6 +13,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const releaseRoot = path.join(root, 'release');
 const require = createRequire(import.meta.url);
 const { validateReleaseConfig } = require('../apps/desktop/electron/release-config.cjs');
+const { appUpdateYml, updateFeed } = require('../apps/desktop/electron/update-config.cjs');
 const contained = (parent, child) => { const relative = path.relative(parent, child); return relative && !relative.startsWith('..') && !path.isAbsolute(relative); };
 
 export function resolveInstallerPaths(projectRoot, version, args) {
@@ -28,10 +29,24 @@ export function resolveInstallerPaths(projectRoot, version, args) {
   return { portable, output };
 }
 
-const sha256 = file => new Promise((resolve, reject) => {
-  const hash = createHash('sha256');
-  createReadStream(file).on('data', chunk => hash.update(chunk)).on('error', reject).on('end', () => resolve(hash.digest('hex')));
+const fileHash = (file, algorithm, encoding) => new Promise((resolve, reject) => {
+  const hash = createHash(algorithm);
+  createReadStream(file).on('data', chunk => hash.update(chunk)).on('error', reject).on('end', () => resolve(hash.digest(encoding)));
 });
+const sha256 = file => fileHash(file, 'sha256', 'hex');
+
+// electron-updater trusts latest.yml for the version, file name, size and sha512 it verifies after downloading.
+export function validateUpdateMetadata(metadata, { version, installer, bytes, sha512 }) {
+  const [file] = Array.isArray(metadata?.files) ? metadata.files : [];
+  const problems = [];
+  if (metadata?.version !== version) problems.push(`version ${metadata?.version} is not ${version}`);
+  if (metadata?.files?.length !== 1 || file?.url !== installer || metadata.path !== installer) problems.push(`it must list exactly ${installer}`);
+  if (file?.sha512 !== sha512 || metadata.sha512 !== sha512) problems.push('its sha512 does not match the installer');
+  if (file?.size !== bytes) problems.push(`its size ${file?.size} is not ${bytes}`);
+  if (file?.isAdminRightsRequired) problems.push('a per-user installer must not require administrator rights');
+  if (problems.length) throw new Error(`Invalid latest.yml: ${problems.join('; ')}`);
+  return metadata;
+}
 
 async function main() {
   if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Build the installer on Windows x64.');
@@ -50,6 +65,8 @@ async function main() {
     const bundled = await readFile(path.join(portable, 'resources/app/electron', name));
     if (!source.equals(bundled)) throw new Error(`Stale desktop release payload: ${name}. Rebuild the portable bundle.`);
   }
+  const updateConfig = await readFile(path.join(portable, 'resources/app-update.yml'), 'utf8').catch(() => null);
+  if (updateConfig !== appUpdateYml()) throw new Error('The portable bundle has a missing or unofficial resources/app-update.yml. Rebuild the portable bundle.');
 
   validateElectronRuntime(manifest.devDependencies?.electron, packageInfo.electron, await readFile(path.join(portable, 'version'), 'utf8'));
 
@@ -77,7 +94,12 @@ async function main() {
   const { size } = await stat(installer);
   const digest = await sha256(installer);
   await writeFile(`${installer}.sha256`, `${digest}  ${path.basename(installer)}\n`);
-  const metadata = { installer: path.basename(installer), version: manifest.version, releaseStatus: 'unpublished-candidate', publicReleaseApproved: false, releaseConfig, bytes: size, sha256: digest, portableSource: path.relative(root, portable), payloadFiles: audit.files, payloadBytes: audit.bytes, unsigned: true, builtAt: new Date().toISOString() };
+  const sha512 = await fileHash(installer, 'sha512', 'base64');
+  validateUpdateMetadata(require('js-yaml').load(await readFile(path.join(output, 'latest.yml'), 'utf8')), { version: manifest.version, installer: path.basename(installer), bytes: size, sha512 });
+  const blockmap = `${installer}.blockmap`;
+  if (!existsSync(blockmap)) throw new Error(`${blockmap} is missing; differential updates need it.`);
+  const update = { feed: `https://github.com/${updateFeed.owner}/${updateFeed.repo}/releases (stable only)`, sha512, releaseAssets: [path.basename(installer), path.basename(blockmap), 'latest.yml'] };
+  const metadata = { installer: path.basename(installer), version: manifest.version, releaseStatus: 'unpublished-candidate', publicReleaseApproved: false, releaseConfig, bytes: size, sha256: digest, update, portableSource: path.relative(root, portable), payloadFiles: audit.files, payloadBytes: audit.bytes, unsigned: true, builtAt: new Date().toISOString() };
   await writeFile(path.join(output, 'INSTALLER-INFO.json'), `${JSON.stringify(metadata, null, 2)}\n`);
   console.log(JSON.stringify({ output, ...metadata, notes: audit.notes, contents: await readdir(output) }, null, 2));
 }
