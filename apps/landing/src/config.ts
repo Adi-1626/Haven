@@ -25,11 +25,11 @@ export interface WindowsRelease {
 export const WINDOWS_RELEASE: WindowsRelease = {
   status: 'available',
   fileName: 'Haven-Setup.exe',
-  url: `${RELEASES_URL}/download/v1.0.0/Haven-Setup.exe`,
-  version: '1.0.0',
-  size: '123 MB',
-  sha256: '76bb06a6cf3a8fd005bc125a7cebfa87a32ddec956961272b6a72f0eab63dd52',
-  notesUrl: `${RELEASES_URL}/tag/v1.0.0`,
+  url: `${RELEASES_URL}/download/v1.0.1/Haven-Setup.exe`,
+  version: '1.0.1',
+  size: '138 MB',
+  sha256: '731e0bf15e07a4b245411d4b4b43f0534c531a7ca51c70fe594ad5ad5b50179d',
+  notesUrl: `${RELEASES_URL}/tag/v1.0.1`,
   signed: false,
 };
 
