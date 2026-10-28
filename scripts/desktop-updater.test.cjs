@@ -11,7 +11,7 @@ const { createUpdater, updateSupport, classifyUpdateError, plainReleaseNotes, co
 const { createUpdateCoordinator, listenExclusive, lockName, INSTALL_GRACE } = require(path.join(electronDir, 'update-coordination.cjs'));
 
 const installed = { 'C:\\Haven\\resources\\app-update.yml': appUpdateYml(), 'C:\\Haven\\Uninstall Haven.exe': '' };
-const support = (overrides = {}, files = installed) => updateSupport({ app: { isPackaged: true }, platform: 'win32', execPath: 'C:\\Haven\\Haven.exe', resourcesPath: 'C:\\Haven\\resources', readFile: file => { if (!(file in files)) throw Object.assign(new Error('missing'), { code: 'ENOENT' }); return files[file]; }, exists: file => file in files, ...overrides });
+const support = (overrides = {}, files = installed, check = updateSupport) => check({ app: { isPackaged: true }, platform: 'win32', execPath: 'C:\\Haven\\Haven.exe', resourcesPath: 'C:\\Haven\\resources', readFile: file => { if (!(file in files)) throw Object.assign(new Error('missing'), { code: 'ENOENT' }); return files[file]; }, exists: file => file in files, ...overrides });
 
 const scratch = [];
 test.after(() => { for (const directory of scratch) fs.rmSync(directory, { recursive: true, force: true }); });
@@ -114,6 +114,21 @@ test('updates run only from an official NSIS installation on Windows', () => {
   assert.match(support({}, { 'C:\\Haven\\Uninstall Haven.exe': '' }).reason, /predates automatic updates/);
   assert.match(support({}, { ...installed, 'C:\\Haven\\resources\\app-update.yml': 'provider: generic\nurl: https://evil.example/\n' }).reason, /not configured for official updates/);
   assert.match(support({}, { 'C:\\Haven\\resources\\app-update.yml': appUpdateYml() }).reason, /Portable copies/);
+});
+
+test('the installation check uses Windows paths on any host, so it also passes on Linux and macOS', () => {
+  // Loads updater.cjs as Linux would (for example a cloud agent): there node:path is path.posix and joins with "/".
+  // Patching node:path in place would not do on Windows, where it is the very object path.win32 refers to.
+  const Module = require('node:module');
+  const file = path.join(electronDir, 'updater.cjs');
+  const linux = new Module(file, module);
+  Object.assign(linux, { filename: file, paths: Module._nodeModulePaths(electronDir) });
+  const load = linux.require.bind(linux);
+  linux.require = id => id === 'node:path' || id === 'path' ? path.posix : load(id);
+  linux._compile(fs.readFileSync(file, 'utf8'), file);
+  const onLinux = (overrides = {}, files = installed) => support({ ...overrides }, files, linux.exports.updateSupport);
+  assert.deepEqual(onLinux(), { supported: true, cacheDirName: 'haven-monorepo-updater' });
+  assert.match(onLinux({}, { 'C:\\Haven\\resources\\app-update.yml': appUpdateYml() }).reason, /Portable copies/);
 });
 
 test('failures are classified into offline, disk, integrity, metadata and HTTP states', () => {

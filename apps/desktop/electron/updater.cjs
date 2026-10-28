@@ -16,12 +16,14 @@ const LOCK_RETRY = 5 * 1000;
 function updateSupport({ app, platform = process.platform, execPath = process.execPath, resourcesPath = process.resourcesPath, readFile = file => fs.readFileSync(file, 'utf8'), exists = fs.existsSync }) {
   if (!app.isPackaged) return { supported: false, reason: 'Automatic updates are available in installed Haven releases.' };
   if (platform !== 'win32') return { supported: false, reason: 'Automatic updates are available on Windows.' };
+  // An NSIS installation is laid out with Windows paths, whatever host evaluates them (tests run on Linux too).
+  const winPath = path.win32;
   let config;
-  try { config = parseAppUpdateYml(readFile(path.join(resourcesPath, 'app-update.yml'))); }
+  try { config = parseAppUpdateYml(readFile(winPath.join(resourcesPath, 'app-update.yml'))); }
   catch { return { supported: false, reason: 'This copy of Haven predates automatic updates. Install the latest Haven-Setup.exe from GitHub Releases once.' }; }
   if (!trustedFeed(config)) return { supported: false, reason: 'This copy of Haven is not configured for official updates.' };
   // electron-updater replaces an NSIS installation in place. A portable folder has no uninstaller and no install record.
-  if (!exists(path.join(path.dirname(execPath), 'Uninstall Haven.exe'))) return { supported: false, reason: 'Portable copies of Haven cannot update themselves. Install Haven with Haven-Setup.exe to receive automatic updates.' };
+  if (!exists(winPath.join(winPath.dirname(execPath), 'Uninstall Haven.exe'))) return { supported: false, reason: 'Portable copies of Haven cannot update themselves. Install Haven with Haven-Setup.exe to receive automatic updates.' };
   return { supported: true, cacheDirName: config.updaterCacheDirName || updateFeed.updaterCacheDirName };
 }
 

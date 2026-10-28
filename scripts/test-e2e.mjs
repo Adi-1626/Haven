@@ -13,6 +13,8 @@ for (const suite of suites) {
     ? ['--config', 'e2e/voice-signaling.config.ts']
     : suite.some(argument => argument.endsWith('turn-mixed.spec.ts'))
     ? ['--config', 'e2e/turn-mixed.config.ts']
+    : suite.some(argument => argument.endsWith('voice-diagnostics.spec.ts'))
+    ? ['--config', 'e2e/voice-diagnostics.config.ts']
     : suite.some(argument => argument.endsWith('voice-sounds.spec.ts'))
     ? ['--config', 'e2e/voice-sounds.config.ts']
     : suite.some(argument => argument.endsWith('stream-subscriptions.spec.ts'))
