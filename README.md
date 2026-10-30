@@ -1,5 +1,7 @@
 # Haven 1.0.1
 
+![Haven screenshot](docs/screenshots/Haven.jpg)
+
 An independent desktop community application inspired by Discord's interaction model. Electron, React, TypeScript, Socket.IO and WebRTC, with separate Hosted (Supabase Auth/PostgreSQL) and Local (SQLite) modes. No Discord code, assets, services or accounts are used.
 
 Public installer candidates default to Hosted Mode: the application at `https://haven-ea6.pages.dev` uses `https://haven-backend.getvoroa.com`. `apps/landing` is the separate marketing website and is excluded from the desktop payload. Source development commands below retain Local Mode. A packaged app can explicitly launch Local Mode with `Haven.exe --local-mode`, using the separate `%APPDATA%/Haven Local` profile. Local accounts and data are never migrated to Hosted.
